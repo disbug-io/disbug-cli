@@ -32,15 +32,17 @@ checksum:
 changelog:
   disable: true
 
-homebrew_casks:
+brews:
   - repository:
       owner: disbug-io
       name: homebrew-tap
     homepage: https://disbug.io
     description: Disbug CLI and MCP server for AI coding agents
     license: MIT
-    binaries:
-      - disbug
+    install: |
+      bin.install "disbug"
+    test: |
+      system "#{bin}/disbug --version"
 
 scoops:
   - repository:
