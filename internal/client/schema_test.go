@@ -110,10 +110,28 @@ func TestBackendOpenAPISchemaContract(t *testing.T) {
 		}
 	}
 
-	// TODO(Phase 2): expand this gate with client round-trip assertions once the
-	// real client methods exist for New, Me, ListSessions, GetSession,
-	// GetPinByNumber, and Search. This test intentionally avoids fake client
-	// production code during the schema-only phase.
+	assertSchemaType(t, doc.Components.Parameters["SessionID"].Value.Schema.Value, "integer")
+	assertSchemaType(t, doc.Components.Schemas["SessionSummary"].Value.Properties["id"].Value, "integer")
+	assertSchemaType(t, doc.Components.Schemas["PinLite"].Value.Properties["id"].Value, "integer")
+	assertPropertyNullable(t, doc.Components.Schemas["SessionSummary"].Value, "project")
+	assertPropertyNullable(t, doc.Components.Schemas["SessionSummary"].Value, "reporter")
+	assertPropertyAbsent(t, doc.Components.Schemas["SessionSummary"].Value, "title")
+	assertPropertyAbsent(t, doc.Components.Schemas["SessionSummary"].Value, "created_at")
+	assertPropertyAbsent(t, doc.Components.Schemas["ErrorEnvelope"].Value, "error")
+	assertPropertyPresent(t, doc.Components.Schemas["ErrorEnvelope"].Value, "code")
+	assertPropertyPresent(t, doc.Components.Schemas["ErrorEnvelope"].Value, "detail")
+	assertPropertyPresent(t, doc.Components.Schemas["ErrorEnvelope"].Value, "request_id")
+	assertPropertyPresent(t, doc.Components.Schemas["Me"].Value, "agent_name")
+	assertPropertyPresent(t, doc.Components.Schemas["Me"].Value, "created_by_email")
+	assertPropertyAbsent(t, doc.Components.Schemas["Me"].Value, "team_id")
+
+	pinFullExtension := doc.Components.Schemas["PinFull"].Value.AllOf[1].Value
+	assertPropertyPresent(t, pinFullExtension, "console")
+	assertPropertyPresent(t, pinFullExtension, "network")
+	assertPropertyPresent(t, pinFullExtension, "events")
+	assertPropertyAbsent(t, pinFullExtension, "console_logs")
+	assertPropertyAbsent(t, pinFullExtension, "network_logs")
+	assertPropertyAbsent(t, pinFullExtension, "user_events")
 }
 
 func operationParameter(operation *openapi3.Operation, name string) *openapi3.Parameter {
@@ -130,4 +148,36 @@ func enumContains(enum []any, want string) bool {
 		got, ok := value.(string)
 		return ok && got == want
 	})
+}
+
+func assertSchemaType(t *testing.T, schema *openapi3.Schema, want string) {
+	t.Helper()
+	if schema == nil || schema.Type == nil || !schema.Type.Is(want) {
+		t.Fatalf("schema type = %v, want %q", schema.Type, want)
+	}
+}
+
+func assertPropertyPresent(t *testing.T, schema *openapi3.Schema, name string) {
+	t.Helper()
+	if schema.Properties[name] == nil {
+		t.Fatalf("schema property %q is missing", name)
+	}
+}
+
+func assertPropertyAbsent(t *testing.T, schema *openapi3.Schema, name string) {
+	t.Helper()
+	if schema.Properties[name] != nil {
+		t.Fatalf("schema property %q is present, want absent", name)
+	}
+}
+
+func assertPropertyNullable(t *testing.T, schema *openapi3.Schema, name string) {
+	t.Helper()
+	property := schema.Properties[name]
+	if property == nil || property.Value == nil {
+		t.Fatalf("schema property %q is missing", name)
+	}
+	if !property.Value.Nullable {
+		t.Fatalf("schema property %q nullable = false, want true", name)
+	}
 }

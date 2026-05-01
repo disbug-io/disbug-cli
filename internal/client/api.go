@@ -25,15 +25,15 @@ type Reporter struct {
 
 // SessionSummary is a compact session record returned by ListSessions.
 type SessionSummary struct {
-	ID               int64    `json:"id"`
-	Project          Project  `json:"project"`
-	URL              string   `json:"url"`
-	Status           string   `json:"status"`
-	PinCount         int      `json:"pin_count"`
-	FirstPinFeedback string   `json:"first_pin_feedback"`
-	Reporter         Reporter `json:"reporter"`
-	UpdatedAt        string   `json:"updated_at"`
-	FreeTierLocked   bool     `json:"free_tier_locked"`
+	ID               int64     `json:"id"`
+	Project          *Project  `json:"project"`
+	URL              string    `json:"url"`
+	Status           string    `json:"status"`
+	PinCount         int       `json:"pin_count"`
+	FirstPinFeedback string    `json:"first_pin_feedback"`
+	Reporter         *Reporter `json:"reporter"`
+	UpdatedAt        string    `json:"updated_at"`
+	FreeTierLocked   bool      `json:"free_tier_locked"`
 }
 
 // ListSessionsParams holds optional filters for ListSessions.
@@ -97,8 +97,8 @@ type PinLite struct {
 type SessionDetail struct {
 	ID        int64     `json:"id"`
 	Status    string    `json:"status"`
-	Project   Project   `json:"project"`
-	Reporter  Reporter  `json:"reporter"`
+	Project   *Project  `json:"project"`
+	Reporter  *Reporter `json:"reporter"`
 	URL       string    `json:"url"`
 	UpdatedAt string    `json:"updated_at"`
 	Pins      []PinLite `json:"pins"`
@@ -119,32 +119,7 @@ type Asset struct {
 	URL         string `json:"url"`
 	ExpiresAt   string `json:"expires_at"`
 	ContentType string `json:"content_type"`
-	SizeBytes   int64  `json:"size_bytes"`
-}
-
-// ConsoleLogItem is a parsed browser console log entry.
-type ConsoleLogItem struct {
-	Level     string `json:"level"`
-	Message   string `json:"message"`
-	Timestamp string `json:"timestamp"`
-	Source    string `json:"source"`
-}
-
-// NetworkLogItem is a parsed network request entry.
-type NetworkLogItem struct {
-	Method     string  `json:"method"`
-	URL        string  `json:"url"`
-	Status     int     `json:"status"`
-	DurationMS float64 `json:"duration_ms"`
-	Timestamp  string  `json:"timestamp"`
-}
-
-// UserEventItem is a parsed browser user event entry.
-type UserEventItem struct {
-	Type      string `json:"type"`
-	Selector  string `json:"selector"`
-	Value     string `json:"value"`
-	Timestamp string `json:"timestamp"`
+	SizeBytes   *int64 `json:"size_bytes"`
 }
 
 // PinFull is a full pin record, including optional heavy fields.
@@ -154,9 +129,9 @@ type PinFull struct {
 	SessionReplay  *Asset           `json:"session_replay"`
 	VoiceNote      *Asset           `json:"voice_note"`
 	VideoRecording *Asset           `json:"video_recording"`
-	Console        []ConsoleLogItem `json:"console"`
-	Network        []NetworkLogItem `json:"network"`
-	Events         []UserEventItem  `json:"events"`
+	Console        []map[string]any `json:"console"`
+	Network        []map[string]any `json:"network"`
+	Events         []map[string]any `json:"events"`
 }
 
 // GetPinByNumber calls GET /api/sessions/{id}/pins/by-number/{n}/.

@@ -81,6 +81,45 @@ func TestListSessions(t *testing.T) {
 	}
 }
 
+func TestListSessionsDecodesNullableProjectAndReporter(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{
+			"results":[{
+				"id":123,
+				"project":null,
+				"url":"https://example.test/page",
+				"status":"open",
+				"pin_count":2,
+				"first_pin_feedback":"broken button",
+				"reporter":null,
+				"updated_at":"2026-05-01T12:00:00Z",
+				"free_tier_locked":false
+			}],
+			"next_cursor":null,
+			"count":1,
+			"free_tier_truncated":false
+		}`)
+	}))
+	t.Cleanup(server.Close)
+
+	c := New(server.URL, "t", "test", nil, server.Client(), nil)
+
+	resp, err := c.ListSessions(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListSessions() error = %v, want nil", err)
+	}
+	if got, want := len(resp.Results), 1; got != want {
+		t.Fatalf("len(Results) = %d, want %d", got, want)
+	}
+	if resp.Results[0].Project != nil {
+		t.Fatalf("Project = %#v, want nil", resp.Results[0].Project)
+	}
+	if resp.Results[0].Reporter != nil {
+		t.Fatalf("Reporter = %#v, want nil", resp.Results[0].Reporter)
+	}
+}
+
 func TestGetSession(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got, want := r.URL.Path, "/api/sessions/123/"; got != want {
@@ -113,6 +152,9 @@ func TestGetSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSession() error = %v, want nil", err)
 	}
+	if session.Project == nil {
+		t.Fatal("Project = nil, want project")
+	}
 	if got, want := session.Project.Name, "Website"; got != want {
 		t.Fatalf("Project.Name = %q, want %q", got, want)
 	}
@@ -124,6 +166,35 @@ func TestGetSession(t *testing.T) {
 	}
 	if got, want := session.Pins[0].ElementInfo["tag"], "button"; got != want {
 		t.Fatalf("ElementInfo[tag] = %v, want %q", got, want)
+	}
+}
+
+func TestGetSessionDecodesNullableProjectAndReporter(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{
+			"id":123,
+			"status":"open",
+			"project":null,
+			"reporter":null,
+			"url":"https://example.test/page",
+			"updated_at":"2026-05-01T12:00:00Z",
+			"pins":[]
+		}`)
+	}))
+	t.Cleanup(server.Close)
+
+	c := New(server.URL, "t", "test", nil, server.Client(), nil)
+
+	session, err := c.GetSession(context.Background(), 123)
+	if err != nil {
+		t.Fatalf("GetSession() error = %v, want nil", err)
+	}
+	if session.Project != nil {
+		t.Fatalf("Project = %#v, want nil", session.Project)
+	}
+	if session.Reporter != nil {
+		t.Fatalf("Reporter = %#v, want nil", session.Reporter)
 	}
 }
 
@@ -210,13 +281,13 @@ func TestGetPin_DecodesHeavyFields(t *testing.T) {
 			"id":456,
 			"number":7,
 			"feedback":"broken button",
-			"screenshot":{"url":"https://cdn.example.test/s.png","content_type":"image/png","size_bytes":12,"expires_at":"2026-05-01T13:00:00Z"},
+			"screenshot":{"url":"https://cdn.example.test/s.png","content_type":"image/png","size_bytes":null,"expires_at":"2026-05-01T13:00:00Z"},
 			"session_replay":{"url":"https://cdn.example.test/r.webm"},
 			"voice_note":{"url":"https://cdn.example.test/v.mp3"},
 			"video_recording":{"url":"https://cdn.example.test/v.webm"},
-			"console":[{"level":"error","message":"boom"}],
-			"network":[{"method":"POST","url":"https://example.test/api","status":201}],
-			"events":[{"type":"click","selector":"#submit"}]
+			"console":[{"type":"console","datetime":"2026-05-01T12:00:00Z","value":"boom","extra":{"level":"error"},"full_url":"https://example.test/page","short_url":"/page","epochTime":1777636800000}],
+			"network":[{"type":"network","status":201,"method":"POST","full_url":"https://example.test/api","short_url":"/api","epochTime":1777636800001,"headers":{"x-test":"1"},"body":"ok"}],
+			"events":[{"target":"#submit","type":"click","timestamp":"2026-05-01T12:00:01Z","x":1}]
 		}`)
 	}))
 	t.Cleanup(server.Close)
@@ -229,6 +300,9 @@ func TestGetPin_DecodesHeavyFields(t *testing.T) {
 	}
 	if pin.Screenshot == nil || pin.Screenshot.URL == "" {
 		t.Fatal("Screenshot was not decoded")
+	}
+	if pin.Screenshot.SizeBytes != nil {
+		t.Fatalf("Screenshot.SizeBytes = %v, want nil", *pin.Screenshot.SizeBytes)
 	}
 	if pin.SessionReplay == nil || pin.VoiceNote == nil || pin.VideoRecording == nil {
 		t.Fatal("one or more asset fields were not decoded")

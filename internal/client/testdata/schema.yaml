@@ -11,12 +11,12 @@ paths:
   /api/me/:
     get:
       operationId: GetMe
-      summary: Get the current authenticated user and team context.
+      summary: Get the current authenticated agent and team context.
       security:
         - bearerAuth: []
       responses:
         "200":
-          description: Current user and team context.
+          description: Current agent and team context.
           content:
             application/json:
               schema:
@@ -93,6 +93,10 @@ paths:
           description: Filter sessions by lifecycle status.
           schema:
             type: string
+            enum:
+              - open
+              - resolved
+              - dismissed
         - name: project
           in: query
           required: false
@@ -140,6 +144,8 @@ paths:
                 $ref: "#/components/schemas/SessionDetail"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
   /api/sessions/{id}/pins/by-number/{n}/:
@@ -160,17 +166,17 @@ paths:
         - name: fields
           in: query
           required: false
-          description: Optional expanded fields to include. Wire values are console_logs, network_logs, user_events, session_replay, voice_note, video_recording, and screenshot.
+          description: Optional expanded fields to include.
           schema:
             type: string
             enum:
+              - screenshot
               - console_logs
               - network_logs
               - user_events
               - session_replay
               - voice_note
               - video_recording
-              - screenshot
       responses:
         "200":
           description: Pin detail.
@@ -178,8 +184,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PinFull"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
   /api/sessions/{id}/pins/{pid}/:
@@ -195,7 +205,22 @@ paths:
           required: true
           description: Pin identifier.
           schema:
+            type: integer
+            minimum: 1
+        - name: fields
+          in: query
+          required: false
+          description: Optional expanded fields to include.
+          schema:
             type: string
+            enum:
+              - screenshot
+              - console_logs
+              - network_logs
+              - user_events
+              - session_replay
+              - voice_note
+              - video_recording
       responses:
         "200":
           description: Pin detail.
@@ -203,8 +228,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PinFull"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 components:
@@ -220,7 +249,8 @@ components:
       required: true
       description: Session identifier.
       schema:
-        type: string
+        type: integer
+        minimum: 1
   responses:
     BadRequest:
       description: Request validation failed.
@@ -230,6 +260,12 @@ components:
             $ref: "#/components/schemas/ErrorEnvelope"
     Unauthorized:
       description: Authentication is required or the token is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Forbidden:
+      description: The agent token is not allowed to access this resource.
       content:
         application/json:
           schema:
@@ -244,88 +280,83 @@ components:
     ErrorEnvelope:
       type: object
       required:
-        - error
+        - code
+        - detail
+        - request_id
       properties:
-        error:
-          type: object
-          required:
-            - code
-            - message
-          properties:
-            code:
-              type: string
-              enum:
-                - bad_request
-                - auth_required
-                - token_revoked
-                - owner_team_lost
-                - agent_read_only
-                - free_tier_locked
-                - not_found
-                - rate_limited
-                - internal_error
-            message:
-              type: string
-            details:
-              type: object
-              additionalProperties: true
+        code:
+          type: string
+          enum:
+            - bad_request
+            - auth_required
+            - token_revoked
+            - owner_team_lost
+            - agent_read_only
+            - free_tier_locked
+            - not_found
+            - rate_limited
+            - internal_error
+        detail:
+          type: string
+        request_id:
+          type: string
     Me:
       type: object
       required:
-        - id
-        - email
-        - team_id
+        - agent_name
+        - team
         - team_slug
-        - plan
+        - created_by_email
+        - token_prefix
+        - last_used_at
+        - api_version
+        - capabilities
       properties:
-        id:
+        agent_name:
           type: string
-        email:
-          type: string
-          format: email
-        name:
-          type: string
-          nullable: true
-        team_id:
+        team:
           type: string
         team_slug:
           type: string
-        team_name:
+        created_by_email:
           type: string
-          nullable: true
-        plan:
+          format: email
+        token_prefix:
           type: string
-        permissions:
+        last_used_at:
+          type: string
+          format: date-time
+        api_version:
+          type: string
+        capabilities:
           type: array
           items:
             type: string
+            enum:
+              - search
+              - pin_field_selection
+              - pin_by_number
     Project:
       type: object
       required:
-        - id
+        - slug
         - name
       properties:
-        id:
+        slug:
           type: string
         name:
           type: string
-        slug:
-          type: string
-          nullable: true
     Reporter:
       type: object
       required:
-        - id
+        - email
+        - display_name
       properties:
-        id:
-          type: string
-        name:
-          type: string
-          nullable: true
         email:
           type: string
           format: email
-          nullable: true
+        display_name:
+          type: string
     ListSessionsResponse:
       type: object
       required:
@@ -350,212 +381,242 @@ components:
       type: object
       required:
         - id
-        - title
-        - status
-        - created_at
-        - updated_at
         - project
+        - url
+        - status
         - pin_count
+        - first_pin_feedback
+        - reporter
+        - updated_at
+        - free_tier_locked
       properties:
         id:
-          type: string
-        title:
-          type: string
-        status:
-          type: string
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-        project:
-          $ref: "#/components/schemas/Project"
-        reporter:
-          $ref: "#/components/schemas/Reporter"
-        pin_count:
           type: integer
-          minimum: 0
+          minimum: 1
+        project:
+          allOf:
+            - $ref: "#/components/schemas/Project"
+          nullable: true
         url:
           type: string
           format: uri
+        status:
+          type: string
+          enum:
+            - open
+            - resolved
+            - dismissed
+        pin_count:
+          type: integer
+          minimum: 0
+        first_pin_feedback:
+          type: string
+          maxLength: 200
+        reporter:
+          allOf:
+            - $ref: "#/components/schemas/Reporter"
           nullable: true
+        updated_at:
+          type: string
+          format: date-time
+        free_tier_locked:
+          type: boolean
     SessionDetail:
-      allOf:
-        - $ref: "#/components/schemas/SessionSummary"
-        - type: object
-          required:
-            - pins
-          properties:
-            description:
-              type: string
-              nullable: true
-            browser:
-              type: string
-              nullable: true
-            os:
-              type: string
-              nullable: true
-            viewport:
-              type: string
-              nullable: true
-            pins:
-              type: array
-              items:
-                $ref: "#/components/schemas/PinLite"
+      type: object
+      required:
+        - id
+        - status
+        - project
+        - reporter
+        - url
+        - updated_at
+        - pins
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum:
+            - open
+            - resolved
+            - dismissed
+        project:
+          allOf:
+            - $ref: "#/components/schemas/Project"
+          nullable: true
+        reporter:
+          allOf:
+            - $ref: "#/components/schemas/Reporter"
+          nullable: true
+        url:
+          type: string
+          format: uri
+        updated_at:
+          type: string
+          format: date-time
+        pins:
+          type: array
+          items:
+            $ref: "#/components/schemas/PinLite"
     PinLite:
       type: object
       required:
         - id
         - number
-        - title
-        - created_at
+        - feedback
+        - url
+        - selector
+        - element_info
+        - metadata
       properties:
         id:
-          type: string
+          type: integer
+          minimum: 1
         number:
           type: integer
           minimum: 1
-        title:
+        feedback:
           type: string
-        created_at:
-          type: string
-          format: date-time
         url:
           type: string
           format: uri
           nullable: true
-        screenshot:
-          $ref: "#/components/schemas/Asset"
+        selector:
+          type: string
+          nullable: true
+        element_info:
+          type: object
+          additionalProperties: true
+        metadata:
+          type: object
+          additionalProperties: true
     PinFull:
       allOf:
         - $ref: "#/components/schemas/PinLite"
         - type: object
           properties:
-            description:
-              type: string
+            screenshot:
+              allOf:
+                - $ref: "#/components/schemas/Asset"
               nullable: true
-            console_logs:
+            session_replay:
+              allOf:
+                - $ref: "#/components/schemas/Asset"
+              nullable: true
+            voice_note:
+              allOf:
+                - $ref: "#/components/schemas/Asset"
+              nullable: true
+            video_recording:
+              allOf:
+                - $ref: "#/components/schemas/Asset"
+              nullable: true
+            console:
               type: array
               items:
                 $ref: "#/components/schemas/ConsoleLogItem"
-            network_logs:
+            network:
               type: array
               items:
                 $ref: "#/components/schemas/NetworkLogItem"
-            user_events:
+            events:
               type: array
               items:
                 $ref: "#/components/schemas/UserEventItem"
-            session_replay:
-              $ref: "#/components/schemas/Asset"
-            voice_note:
-              $ref: "#/components/schemas/Asset"
-            video_recording:
-              $ref: "#/components/schemas/Asset"
-            assets:
-              type: array
-              items:
-                $ref: "#/components/schemas/Asset"
     Asset:
       type: object
       required:
         - url
+        - expires_at
+        - content_type
+        - size_bytes
       properties:
         url:
           type: string
           format: uri
+        expires_at:
+          type: string
+          format: date-time
         content_type:
           type: string
-          nullable: true
         size_bytes:
           type: integer
           minimum: 0
           nullable: true
-        expires_at:
-          type: string
-          format: date-time
-          nullable: true
     ConsoleLogItem:
       type: object
-      required:
-        - level
-        - message
-        - timestamp
-      properties:
-        level:
-          type: string
-        message:
-          type: string
-        timestamp:
-          type: string
-          format: date-time
-        source:
-          type: string
-          nullable: true
-    NetworkLogItem:
-      type: object
-      required:
-        - method
-        - url
-        - status
-        - timestamp
-      properties:
-        method:
-          type: string
-        url:
-          type: string
-          format: uri
-        status:
-          type: integer
-        duration_ms:
-          type: number
-          nullable: true
-        timestamp:
-          type: string
-          format: date-time
-    UserEventItem:
-      type: object
-      required:
-        - type
-        - timestamp
+      additionalProperties: true
       properties:
         type:
           type: string
-        selector:
+        datetime:
           type: string
-          nullable: true
-        value:
+        value: {}
+        extra: {}
+        full_url:
           type: string
-          nullable: true
-        timestamp:
+        short_url:
           type: string
-          format: date-time
+        epochTime:
+          type: number
+    NetworkLogItem:
+      type: object
+      additionalProperties: true
+      properties:
+        type:
+          type: string
+        status:
+          type: integer
+        method:
+          type: string
+        full_url:
+          type: string
+        short_url:
+          type: string
+        epochTime:
+          type: number
+        headers: {}
+        body: {}
+    UserEventItem:
+      type: object
+      additionalProperties: true
+      properties:
+        target: {}
+        type:
+          type: string
+        timestamp: {}
     SearchSessionsResponse:
       type: object
       required:
-        - scope
         - results
+        - total
       properties:
-        scope:
-          type: string
-          enum:
-            - sessions
         results:
           type: array
           items:
             $ref: "#/components/schemas/SessionSummary"
+        total:
+          type: integer
+          minimum: 0
     SearchPinsResponse:
       type: object
       required:
-        - scope
         - results
+        - total
       properties:
-        scope:
-          type: string
-          enum:
-            - pins
         results:
           type: array
           items:
-            $ref: "#/components/schemas/PinLite"
+            type: object
+            required:
+              - pin
+              - session
+            properties:
+              pin:
+                $ref: "#/components/schemas/PinLite"
+              session:
+                $ref: "#/components/schemas/SessionSummary"
+        total:
+          type: integer
+          minimum: 0
