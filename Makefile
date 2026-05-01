@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := build
-.PHONY: build test lint fmt fmt-check tools ci clean run cover
+.PHONY: build test lint fmt fmt-check tools ci clean run cover codegen
 
 BIN_DIR := $(CURDIR)/bin
 BIN := $(BIN_DIR)/disbug
@@ -50,6 +50,10 @@ tools:
 		GOBIN=$(TOOLS_DIR) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4; \
 		printf '%s\n' "$(TOOLS_VERSION)" > "$(TOOLS_STAMP)"; \
 	fi
+
+codegen: tools
+	@.tools/oapi-codegen --version >/dev/null 2>&1 || GOBIN=$(TOOLS_DIR) go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.4.0
+	@./scripts/regen-client.sh
 
 fmt: tools
 	@$(GOIMPORTS) -local github.com/disbug-io/disbug-cli -w .

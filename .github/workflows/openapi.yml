@@ -1,0 +1,38 @@
+name: openapi-regen
+
+"on":
+  schedule:
+    - cron: "0 6 * * 1"  # Monday 06:00 UTC
+  workflow_dispatch:
+
+env:
+  DISBUG_SCHEMA_URL: https://disbug.io/api/schema/
+
+jobs:
+  regen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: make codegen
+      - id: diff
+        run: |
+          if git diff --quiet -- internal/client/generated.go; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Open PR
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          branch: chore/openapi-regen
+          title: "chore(client): regenerate OpenAPI client"
+          body: "Auto-regenerated from `${{ env.DISBUG_SCHEMA_URL }}`."
+          commit-message: "chore(client): regenerate OpenAPI client"

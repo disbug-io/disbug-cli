@@ -1,0 +1,8 @@
+package: client
+generate:
+  models: true
+  std-http-server: false
+  client: true
+output: internal/client/generated.go
+output-options:
+  skip-prune: true
