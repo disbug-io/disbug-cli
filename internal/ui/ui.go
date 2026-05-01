@@ -52,6 +52,13 @@ type UI struct {
 
 // New creates a UI with resolved color support.
 func New(stdout, stderr io.Writer, mode ColorMode, isTTY bool) *UI {
+	if stdout == nil {
+		stdout = io.Discard
+	}
+	if stderr == nil {
+		stderr = io.Discard
+	}
+
 	return &UI{
 		stdout: stdout,
 		stderr: stderr,

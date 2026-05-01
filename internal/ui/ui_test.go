@@ -96,6 +96,27 @@ func TestNewResolvesColor(t *testing.T) {
 	}
 }
 
+func TestNewDefaultsNilWritersToDiscard(t *testing.T) {
+	u := New(nil, nil, ColorNever, false)
+
+	if u.Stdout() == nil {
+		t.Fatal("Stdout() = nil, want non-nil writer")
+	}
+	if u.Stderr() == nil {
+		t.Fatal("Stderr() = nil, want non-nil writer")
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("nil writer output panicked: %v", r)
+		}
+	}()
+
+	u.Outf("stdout %s", "message")
+	u.Errf("stderr %s", "message")
+	u.Errln("stderr", "line")
+}
+
 func TestOutfWritesToStdout(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
