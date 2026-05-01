@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -34,8 +35,17 @@ func ValidateProfileName(name string) error {
 
 // Dir returns the directory used for profile token files.
 func Dir() (string, error) {
-	if xdgConfigHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); xdgConfigHome != "" {
+	rawXDGConfigHome, hasXDGConfigHome := os.LookupEnv("XDG_CONFIG_HOME")
+	if xdgConfigHome := strings.TrimSpace(rawXDGConfigHome); xdgConfigHome != "" {
 		return filepath.Join(xdgConfigHome, appName), nil
+	}
+	if hasXDGConfigHome && rawXDGConfigHome != "" {
+		configDir, err := defaultConfigDir(runtime.GOOS, os.Getenv("HOME"), os.Getenv("APPDATA"))
+		if err != nil {
+			return "", fmt.Errorf("resolve user config dir: %w", err)
+		}
+
+		return filepath.Join(configDir, appName), nil
 	}
 
 	configDir, err := os.UserConfigDir()
@@ -44,6 +54,26 @@ func Dir() (string, error) {
 	}
 
 	return filepath.Join(configDir, appName), nil
+}
+
+func defaultConfigDir(goos, home, appData string) (string, error) {
+	switch goos {
+	case "windows":
+		if appData == "" {
+			return "", fmt.Errorf("APPDATA is not defined")
+		}
+		return appData, nil
+	case "darwin":
+		if home == "" {
+			return "", fmt.Errorf("HOME is not defined")
+		}
+		return filepath.Join(home, "Library", "Application Support"), nil
+	default:
+		if home == "" {
+			return "", fmt.Errorf("HOME is not defined")
+		}
+		return filepath.Join(home, ".config"), nil
+	}
 }
 
 // ProfilePath returns the JSON file path for a validated profile name.

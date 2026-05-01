@@ -76,6 +76,32 @@ func TestProfilePathWhitespaceXDGConfigHomeFallsBackToUserConfigDir(t *testing.T
 	}
 }
 
+func TestDefaultConfigDirForPlatform(t *testing.T) {
+	tests := []struct {
+		name    string
+		goos    string
+		home    string
+		appdata string
+		want    string
+	}{
+		{name: "linux", goos: "linux", home: "/home/test", want: filepath.Join("/home/test", ".config")},
+		{name: "darwin", goos: "darwin", home: "/Users/test", want: filepath.Join("/Users/test", "Library", "Application Support")},
+		{name: "windows", goos: "windows", appdata: `C:\Users\test\AppData\Roaming`, want: `C:\Users\test\AppData\Roaming`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := defaultConfigDir(tt.goos, tt.home, tt.appdata)
+			if err != nil {
+				t.Fatalf("defaultConfigDir() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("defaultConfigDir() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestWriteReadRoundTripAndOverwrite(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
