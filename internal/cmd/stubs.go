@@ -5,8 +5,6 @@ import "errors"
 var errStub = errors.New("not implemented yet (stub)")
 
 type (
-	// PinCmd is a placeholder for the pin command.
-	PinCmd struct{}
 	// PinsCmd is a placeholder for the pins command.
 	PinsCmd struct{}
 	// SearchCmd is a placeholder for the search command.
@@ -22,9 +20,6 @@ type (
 	// MCPCmd is a placeholder for the mcp command.
 	MCPCmd struct{}
 )
-
-// Run returns the shared placeholder error.
-func (PinCmd) Run(bindings) error { return errStub }
 
 // Run returns the shared placeholder error.
 func (PinsCmd) Run(bindings) error { return errStub }
