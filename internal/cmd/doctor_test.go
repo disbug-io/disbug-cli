@@ -58,6 +58,9 @@ func TestDoctor_Healthy(t *testing.T) {
 
 func TestDoctor_MissingCapability(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got, want := r.Method, http.MethodGet; got != want {
+			t.Fatalf("method = %q, want %q", got, want)
+		}
 		if got, want := r.URL.Path, "/api/me/"; got != want {
 			t.Fatalf("path = %q, want %q", got, want)
 		}
@@ -94,17 +97,20 @@ func TestDoctor_MissingCapability(t *testing.T) {
 
 func TestDoctor_MeServerErrorPrintsFail(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got, want := r.Method, http.MethodGet; got != want {
+			t.Fatalf("method = %q, want %q", got, want)
+		}
 		if got, want := r.URL.Path, "/api/me/"; got != want {
 			t.Fatalf("path = %q, want %q", got, want)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = io.WriteString(w, `{"code":"server_error","detail":"try later","request_id":"req_123"}`)
+		_, _ = io.WriteString(w, `{"code":"server_error","detail":"database password leaked","request_id":"req_123"}`)
 	}))
 	t.Cleanup(srv.Close)
 	setupClient(t, srv)
 
-	stdout, _, err := executeDoctor(t, "doctor")
+	stdout, stderr, err := executeDoctor(t, "doctor")
 
 	if err == nil {
 		t.Fatal("Execute() error = nil, want API error")
@@ -113,8 +119,18 @@ func TestDoctor_MeServerErrorPrintsFail(t *testing.T) {
 	if !errors.As(err, &apiErr) {
 		t.Fatalf("Execute() error = %T, want errfmt.APIError", err)
 	}
-	if !strings.Contains(stdout, "/api/me/ FAIL - try later") {
-		t.Fatalf("stdout = %q, want FAIL line", stdout)
+	sanitized := "Server error (500). Request ID: req_123. Try again, or report this ID to support."
+	if !strings.Contains(stdout, "/api/me/ FAIL - "+sanitized) {
+		t.Fatalf("stdout = %q, want sanitized FAIL line", stdout)
+	}
+	if strings.Contains(stdout, "database password leaked") {
+		t.Fatalf("stdout = %q, want no raw detail", stdout)
+	}
+	if !strings.Contains(stderr, sanitized) {
+		t.Fatalf("stderr = %q, want sanitized error", stderr)
+	}
+	if strings.Contains(stderr, "database password leaked") {
+		t.Fatalf("stderr = %q, want no raw detail", stderr)
 	}
 }
 

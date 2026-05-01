@@ -34,7 +34,7 @@ func (c *DoctorCmd) Run(ctx context.Context, b bindings) error {
 
 	me, err := cli.Me(ctx)
 	if err != nil {
-		_, _ = fmt.Fprintf(b.Stdout, "/api/me/ FAIL - %s\n", err.Error())
+		_, _ = fmt.Fprintf(b.Stdout, "/api/me/ FAIL - %s\n", errfmt.Format(err))
 		return err
 	}
 
