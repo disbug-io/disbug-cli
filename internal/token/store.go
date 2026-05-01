@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 )
 
 const defaultAPIURL = "https://disbug.io"
@@ -30,7 +31,7 @@ type Token struct {
 
 // Read loads a token profile unless DISBUG_TOKEN provides an environment override.
 func Read(name string) (Token, error) {
-	if envToken := os.Getenv("DISBUG_TOKEN"); envToken != "" {
+	if envToken := strings.TrimSpace(os.Getenv("DISBUG_TOKEN")); envToken != "" {
 		apiURL := os.Getenv("DISBUG_API_URL")
 		if apiURL == "" {
 			apiURL = defaultAPIURL

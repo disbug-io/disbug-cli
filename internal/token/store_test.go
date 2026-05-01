@@ -156,6 +156,30 @@ func TestReadEnvOverride(t *testing.T) {
 	}
 }
 
+func TestReadEnvOverrideTrimsToken(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("DISBUG_TOKEN", "  dba_envoverride000000000  ")
+
+	got, err := Read("default")
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+
+	if got.Token != "dba_envoverride000000000" {
+		t.Fatalf("Read().Token = %q, want trimmed token", got.Token)
+	}
+}
+
+func TestReadWhitespaceOnlyEnvTokenDoesNotOverride(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("DISBUG_TOKEN", "   ")
+
+	_, err := Read("default")
+	if !errors.Is(err, ErrProfileNotFound) {
+		t.Fatalf("Read() error = %v, want ErrProfileNotFound", err)
+	}
+}
+
 func TestReadEnvOverrideDefaultsAPIURLAndSkipsProfilePathValidation(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "missing"))
 	t.Setenv("DISBUG_TOKEN", "env-token")
