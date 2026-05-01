@@ -29,6 +29,8 @@ func serveStdio(ctx context.Context, srv *mcp.Server) error {
 	return srv.Run(ctx, &mcp.StdioTransport{})
 }
 
+var serveStdioFn = serveStdio
+
 func jsonResult(v any) *mcp.CallToolResult {
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: jsonText(v)}},

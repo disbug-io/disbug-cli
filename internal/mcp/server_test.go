@@ -1,7 +1,10 @@
 package mcp
 
 import (
+	"bytes"
+	"context"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 
@@ -73,5 +76,47 @@ func TestResultHelpersReturnTextContent(t *testing.T) {
 	}
 	if errText.Text != "boom" {
 		t.Fatalf("errResult text = %q, want formatted error", errText.Text)
+	}
+}
+
+func TestRunLogsServeStdioErrorAndReturnsNil(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	originalServeStdioFn := serveStdioFn
+	t.Cleanup(func() {
+		serveStdioFn = originalServeStdioFn
+	})
+	serveStdioFn = func(context.Context, *mcp.Server) error {
+		return errors.New("loop failed")
+	}
+
+	var stderr bytes.Buffer
+	err := Run(context.Background(), "default", &stderr)
+	if err != nil {
+		t.Fatalf("Run() error = %v, want nil", err)
+	}
+	if !strings.Contains(stderr.String(), "mcp: loop failed\n") {
+		t.Fatalf("stderr = %q, want mcp loop warning", stderr.String())
+	}
+}
+
+func TestRunTreatsServeStdioEOFAsNormal(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	originalServeStdioFn := serveStdioFn
+	t.Cleanup(func() {
+		serveStdioFn = originalServeStdioFn
+	})
+	serveStdioFn = func(context.Context, *mcp.Server) error {
+		return io.EOF
+	}
+
+	var stderr bytes.Buffer
+	err := Run(context.Background(), "default", &stderr)
+	if err != nil {
+		t.Fatalf("Run() error = %v, want nil", err)
+	}
+	if strings.Contains(stderr.String(), "mcp:") {
+		t.Fatalf("stderr = %q, want no mcp loop warning", stderr.String())
 	}
 }

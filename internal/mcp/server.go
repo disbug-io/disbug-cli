@@ -75,7 +75,7 @@ func Run(ctx context.Context, profile string, stderr io.Writer) error {
 
 	serveDone := make(chan error, 1)
 	go func() {
-		serveDone <- serveStdio(serveCtx, srv)
+		serveDone <- serveStdioFn(serveCtx, srv)
 	}()
 
 	sigCh := make(chan os.Signal, 1)
@@ -85,10 +85,10 @@ func Run(ctx context.Context, profile string, stderr io.Writer) error {
 	select {
 	case err := <-serveDone:
 		cancel()
-		if errors.Is(err, io.EOF) {
-			return nil
+		if err != nil && !errors.Is(err, io.EOF) {
+			writef(stderr, "mcp: %s\n", err)
 		}
-		return err
+		return nil
 	case sig := <-sigCh:
 		cancel()
 		waitForServeDone(serveDone)
