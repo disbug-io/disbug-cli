@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -104,6 +105,44 @@ func TestDefaultRandomIgnoresDeterministicSeedWithoutTestHooks(t *testing.T) {
 
 	if got := DefaultRandom(); got != crand.Reader {
 		t.Fatalf("DefaultRandom() = %T, want crypto/rand.Reader when test hooks are disabled", got)
+	}
+}
+
+func TestDefaultClockIgnoresFrozenTimeWithoutTestHooks(t *testing.T) {
+	t.Setenv("DISBUG_TEST_FROZEN_TIME", "2026-01-02T03:04:05Z")
+
+	if _, ok := DefaultClock().(*FixedClock); ok {
+		t.Fatal("DefaultClock() returned a fixed clock when test hooks are disabled")
+	}
+}
+
+func TestDefaultSleeperIgnoresFastSleepWithoutTestHooks(t *testing.T) {
+	t.Setenv("DISBUG_TEST_FAST_SLEEP", "1")
+
+	if _, ok := DefaultSleeper().(noOpSleeper); ok {
+		t.Fatal("DefaultSleeper() returned a no-op sleeper when test hooks are disabled")
+	}
+}
+
+func TestDefaultBrowserOpenerIgnoresNoBrowserWithoutTestHooks(t *testing.T) {
+	t.Setenv("DISBUG_TEST_NO_BROWSER", "1")
+
+	got := reflect.ValueOf(DefaultBrowserOpener()).Pointer()
+	noBrowser := reflect.ValueOf(noOpBrowserOpener).Pointer()
+	if got == noBrowser {
+		t.Fatal("DefaultBrowserOpener() returned the no-browser opener when test hooks are disabled")
+	}
+}
+
+func TestEnableTestHooksEnvironmentEnablesHooks(t *testing.T) {
+	t.Setenv("DISBUG_ENABLE_TEST_HOOKS", "1")
+	t.Setenv("DISBUG_TEST_FROZEN_TIME", "2026-01-02T03:04:05Z")
+
+	got := DefaultClock().Now()
+	want := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	if !got.Equal(want) {
+		t.Fatalf("DefaultClock().Now() = %s, want %s", got, want)
 	}
 }
 

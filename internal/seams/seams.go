@@ -138,30 +138,34 @@ func DefaultHTTPDoer() HTTPDoer {
 // DefaultBrowserOpener returns the platform browser opener or a no-op opener when hooks are enabled.
 func DefaultBrowserOpener() BrowserOpener {
 	if devBuild() && os.Getenv("DISBUG_TEST_NO_BROWSER") == "1" {
-		return func(url string) error {
-			_, err := fmt.Fprintln(os.Stderr, url)
-			return err
-		}
+		return noOpBrowserOpener
 	}
 
-	return func(url string) error {
-		var cmd *exec.Cmd
-		switch runtime.GOOS {
-		case "darwin":
-			// #nosec G204 -- browser opener intentionally passes the caller-provided URL to the platform command.
-			cmd = exec.Command("open", url)
-		case "windows":
-			// #nosec G204 -- browser opener intentionally passes the caller-provided URL to the platform command.
-			cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-		case "linux":
-			// #nosec G204 -- browser opener intentionally passes the caller-provided URL to the platform command.
-			cmd = exec.Command("xdg-open", url)
-		default:
-			return fmt.Errorf("unsupported platform for browser opener: %s", runtime.GOOS)
-		}
+	return platformBrowserOpener
+}
 
-		return cmd.Start()
+func noOpBrowserOpener(url string) error {
+	_, err := fmt.Fprintln(os.Stderr, url)
+	return err
+}
+
+func platformBrowserOpener(url string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		// #nosec G204 -- browser opener intentionally passes the caller-provided URL to the platform command.
+		cmd = exec.Command("open", url)
+	case "windows":
+		// #nosec G204 -- browser opener intentionally passes the caller-provided URL to the platform command.
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	case "linux":
+		// #nosec G204 -- browser opener intentionally passes the caller-provided URL to the platform command.
+		cmd = exec.Command("xdg-open", url)
+	default:
+		return fmt.Errorf("unsupported platform for browser opener: %s", runtime.GOOS)
 	}
+
+	return cmd.Start()
 }
 
 type seededReader struct {
@@ -197,7 +201,7 @@ func devBuild() bool {
 }
 
 func testHooksAllowed() bool {
-	return testHooksEnabled.Load()
+	return testHooksEnabled.Load() || os.Getenv("DISBUG_ENABLE_TEST_HOOKS") == "1"
 }
 
 func enableTestHooksForTesting() func() {
