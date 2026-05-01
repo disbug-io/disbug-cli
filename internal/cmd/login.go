@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,15 +27,15 @@ const (
 
 // LoginCmd logs in to Disbug and persists a token profile.
 type LoginCmd struct {
-	Name           string `help:"Agent name to pre-fill. Defaults to hostname."`
-	APIURL         string `name:"api-url" env:"DISBUG_API_URL" default:"https://disbug.io" help:"Disbug API URL."`
-	ListenAddr     string `name:"listen-addr" help:"Local listener host:port override."`
-	Manual         bool   `help:"Print auth URL and paste redirect URL back instead of listening."`
-	NoBrowser      bool   `name:"no-browser" help:"Print auth URL instead of opening the browser."`
-	Force          bool   `help:"Overwrite an existing token profile."`
-	Token          string `help:"Set token directly."`
-	TokenFromStdin bool   `name:"token-from-stdin" help:"Read token from the first stdin line."`
-	TokenFromEnv   bool   `name:"token-from-env" help:"Read token from DISBUG_LOGIN_TOKEN."`
+	Name           string  `help:"Agent name to pre-fill. Defaults to hostname."`
+	APIURL         string  `name:"api-url" env:"DISBUG_API_URL" default:"https://disbug.io" help:"Disbug API URL."`
+	ListenAddr     string  `name:"listen-addr" help:"Local listener host:port override."`
+	Manual         bool    `help:"Print auth URL and paste redirect URL back instead of listening."`
+	NoBrowser      bool    `name:"no-browser" help:"Print auth URL instead of opening the browser."`
+	Force          bool    `help:"Overwrite an existing token profile."`
+	Token          *string `help:"Set token directly."`
+	TokenFromStdin bool    `name:"token-from-stdin" help:"Read token from the first stdin line."`
+	TokenFromEnv   bool    `name:"token-from-env" help:"Read token from DISBUG_LOGIN_TOKEN."`
 }
 
 // Run executes the login flow.
@@ -87,7 +89,7 @@ func (c *LoginCmd) Run(ctx context.Context, b bindings) error {
 
 func (c *LoginCmd) validateFlags() error {
 	modes := 0
-	for _, enabled := range []bool{c.Manual, c.Token != "", c.TokenFromStdin, c.TokenFromEnv} {
+	for _, enabled := range []bool{c.Manual, c.Token != nil, c.TokenFromStdin, c.TokenFromEnv} {
 		if enabled {
 			modes++
 		}
@@ -104,9 +106,13 @@ func (c *LoginCmd) validateFlags() error {
 
 func (c *LoginCmd) acquireToken(ctx context.Context, b bindings, name string, sleeper seams.Sleeper) (string, error) {
 	switch {
-	case c.Token != "":
+	case c.Token != nil:
+		value := strings.TrimSpace(*c.Token)
+		if value == "" {
+			return "", errfmt.UsageError{Message: "--token requires a non-empty value"}
+		}
 		_, _ = fmt.Fprintln(b.Stderr, "warning: using token provided on the command line")
-		return strings.TrimSpace(c.Token), nil
+		return value, nil
 	case c.TokenFromStdin:
 		line, err := readFirstLine(b.Stdin)
 		if err != nil {
@@ -215,13 +221,22 @@ func callbackURL(listenAddr string, port int) string {
 	if listenAddr != "" {
 		if parsedHost, _, err := net.SplitHostPort(listenAddr); err == nil {
 			parsedHost = strings.Trim(parsedHost, "[]")
-			if parsedHost != "" && parsedHost != "0.0.0.0" && parsedHost != "::" && parsedHost != "::1" {
+			switch parsedHost {
+			case "", "0.0.0.0":
+				host = "127.0.0.1"
+			case "::":
+				host = "::1"
+			default:
 				host = parsedHost
 			}
 		}
 	}
 
-	return fmt.Sprintf("http://%s:%d/cb", host, port)
+	return (&url.URL{
+		Scheme: "http",
+		Host:   net.JoinHostPort(host, strconv.Itoa(port)),
+		Path:   "/cb",
+	}).String()
 }
 
 func readFirstLine(r ioReader) (string, error) {

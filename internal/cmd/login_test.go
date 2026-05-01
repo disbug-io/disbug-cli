@@ -237,6 +237,60 @@ func TestLoginTokenFromEnvEmptyReturnsUsageError(t *testing.T) {
 	assert.Empty(t, stdout.String())
 }
 
+func TestLoginTokenFlagEmptyReturnsUsageError(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{name: "empty", value: ""},
+		{name: "whitespace", value: "   "},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			var apiHits atomic.Int64
+			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				apiHits.Add(1)
+				http.Error(w, "unexpected API request", http.StatusTeapot)
+			}))
+			defer backend.Close()
+
+			opened := make(chan string, 1)
+			previous := auth.SwapBrowserOpener(func(rawURL string) error {
+				opened <- rawURL
+				return nil
+			})
+			defer auth.SwapBrowserOpener(previous)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			err := Execute(
+				ctx,
+				[]string{"login", "--api-url", backend.URL, "--token", tt.value},
+				strings.NewReader(""),
+				&stdout,
+				&stderr,
+			)
+
+			require.Error(t, err)
+			var usage errfmt.UsageError
+			assert.True(t, errors.As(err, &usage))
+			assert.Equal(t, 2, ExitCode(err))
+			assert.Contains(t, stderr.String(), "--token")
+			assert.Empty(t, stdout.String())
+			assert.Equal(t, int64(0), apiHits.Load(), "empty --token should fail before API validation")
+			select {
+			case rawURL := <-opened:
+				t.Fatalf("browser opener called with %q; empty --token should fail before browser/API", rawURL)
+			default:
+			}
+		})
+	}
+}
+
 func TestLoginBrowserFlowUsesFastSleeperHook(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("DISBUG_ENABLE_TEST_HOOKS", "1")
@@ -284,6 +338,49 @@ func TestLoginBrowserFlowUsesFastSleeperHook(t *testing.T) {
 		t.Fatal("login command slept for real time instead of using the test sleeper hook")
 	}
 	assert.Less(t, time.Since(start), 300*time.Millisecond)
+}
+
+func TestCallbackURL(t *testing.T) {
+	tests := []struct {
+		name       string
+		listenAddr string
+		want       string
+	}{
+		{
+			name: "empty listen addr",
+			want: "http://127.0.0.1:1234/cb",
+		},
+		{
+			name:       "localhost",
+			listenAddr: "localhost:1234",
+			want:       "http://localhost:1234/cb",
+		},
+		{
+			name:       "ipv4 unspecified",
+			listenAddr: "0.0.0.0:1234",
+			want:       "http://127.0.0.1:1234/cb",
+		},
+		{
+			name:       "ipv6 unspecified",
+			listenAddr: "[::]:1234",
+			want:       "http://[::1]:1234/cb",
+		},
+		{
+			name:       "ipv6 loopback",
+			listenAddr: "[::1]:1234",
+			want:       "http://[::1]:1234/cb",
+		},
+		{
+			name:       "non loopback ipv6",
+			listenAddr: "[2001:db8::1]:1234",
+			want:       "http://[2001:db8::1]:1234/cb",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, callbackURL(tt.listenAddr, 1234))
+		})
+	}
 }
 
 func newLoginBackend(t *testing.T) *httptest.Server {
