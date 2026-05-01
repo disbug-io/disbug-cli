@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strings"
 
@@ -69,7 +68,7 @@ func bulkFailureError(res client.BulkResult) error {
 
 	first := res.Errors[0]
 	if res.FirstFailureExitCode() == 5 {
-		return &errfmt.NetworkError{Cause: errors.New(first.Message)}
+		return errfmt.NetworkError{}
 	}
 
 	return &errfmt.APIError{

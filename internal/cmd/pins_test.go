@@ -94,6 +94,41 @@ func TestPinsAllFailedReturnsFirstFailureExitCodeAndWritesJSON(t *testing.T) {
 	}
 }
 
+func TestPinsAllFailedNetworkErrorReturnsCleanExitCodeAndWritesJSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/me/":
+			writePinCapabilities(w, "pin_field_selection", "pin_by_number")
+		case "/api/sessions/7392/pins/by-number/2/", "/api/sessions/7392/pins/by-number/3/":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(
+				w,
+				`{"code":"network_error","detail":"Cannot reach https://example.test. Check your network. (cause: dial tcp)"}`,
+			)
+		default:
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	setupClient(t, srv)
+
+	stdout, stderr, err := executePins(t, "pins", "7392.2", "7392.3")
+
+	if err == nil {
+		t.Fatal("Execute() error = nil, want all-failed network error")
+	}
+	if got, want := ExitCode(err), 5; got != want {
+		t.Fatalf("ExitCode() = %d, want %d; stdout=%q stderr=%q err=%T %v", got, want, stdout, stderr, err, err)
+	}
+	if !bytes.Contains([]byte(stdout), []byte(`"error_code":"network_error"`)) {
+		t.Fatalf("stdout = %q, want network_error bulk JSON", stdout)
+	}
+	if strings.Count(stderr, "Cannot reach") > 1 {
+		t.Fatalf("stderr = %q, want non-nested network message", stderr)
+	}
+}
+
 func TestPinsMalformedRefReturnsUsageAndDoesNotCallHTTP(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatalf("server was called for invalid pin ref: %s %s", r.Method, r.URL.String())
