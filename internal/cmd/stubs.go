@@ -5,8 +5,6 @@ import "errors"
 var errStub = errors.New("not implemented yet (stub)")
 
 type (
-	// SessionsCmd is a placeholder for the sessions command.
-	SessionsCmd struct{}
 	// SessionCmd is a placeholder for the session command.
 	SessionCmd struct{}
 	// PinCmd is a placeholder for the pin command.
@@ -26,9 +24,6 @@ type (
 	// MCPCmd is a placeholder for the mcp command.
 	MCPCmd struct{}
 )
-
-// Run returns the shared placeholder error.
-func (SessionsCmd) Run(bindings) error { return errStub }
 
 // Run returns the shared placeholder error.
 func (SessionCmd) Run(bindings) error { return errStub }

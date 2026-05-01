@@ -86,6 +86,7 @@ func TestFormatUserFacingError(t *testing.T) {
 
 func TestFormatUsageError(t *testing.T) {
 	assert.Equal(t, "usage: disbug open <ref>", Format(UsageError{Message: "usage: disbug open <ref>"}))
+	assert.Equal(t, "usage: disbug open <ref>", Format(&UsageError{Message: "usage: disbug open <ref>"}))
 }
 
 func TestFormatFallback(t *testing.T) {
@@ -101,6 +102,7 @@ func TestExitCode(t *testing.T) {
 	}{
 		{name: "nil", err: nil, want: 0},
 		{name: "usage", err: UsageError{Message: "bad usage"}, want: 2},
+		{name: "usage pointer", err: &UsageError{Message: "bad usage"}, want: 2},
 		{name: "no token", err: NoToken{}, want: 4},
 		{name: "api 401", err: APIError{StatusCode: 401}, want: 4},
 		{name: "auth code with 403", err: APIError{StatusCode: 403, Code: "token_revoked"}, want: 4},

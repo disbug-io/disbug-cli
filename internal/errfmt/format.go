@@ -20,6 +20,10 @@ func Format(err error) string {
 	if errors.As(err, &usage) {
 		return usage.Message
 	}
+	var usagePtr *UsageError
+	if errors.As(err, &usagePtr) && usagePtr != nil {
+		return usagePtr.Message
+	}
 
 	var noToken NoToken
 	if errors.As(err, &noToken) {
@@ -53,6 +57,10 @@ func ExitCode(err error) int {
 
 	var usage UsageError
 	if errors.As(err, &usage) {
+		return 2
+	}
+	var usagePtr *UsageError
+	if errors.As(err, &usagePtr) && usagePtr != nil {
 		return 2
 	}
 

@@ -1,0 +1,189 @@
+package cmd
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/disbug-io/disbug-cli/internal/errfmt"
+	"github.com/disbug-io/disbug-cli/internal/token"
+)
+
+func TestSessionsBasicList(t *testing.T) {
+	var called bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		if got, want := r.URL.Path, "/api/sessions/"; got != want {
+			t.Fatalf("path = %q, want %q", got, want)
+		}
+		if got, want := r.URL.Query().Get("status"), "open"; got != want {
+			t.Fatalf("status query = %q, want %q", got, want)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{
+			"results":[{
+				"id":123,
+				"project":{"slug":"web","name":"Website"},
+				"url":"https://example.test/page",
+				"status":"open",
+				"pin_count":2,
+				"first_pin_feedback":"broken button",
+				"reporter":{"email":"r@example.test","display_name":"Reporter"},
+				"updated_at":"2026-05-01T12:00:00Z",
+				"free_tier_locked":false
+			}],
+			"next_cursor":null,
+			"count":1,
+			"free_tier_truncated":false
+		}`)
+	}))
+	t.Cleanup(srv.Close)
+	setupClient(t, srv)
+
+	stdout, stderr, err := executeSessions(t, "sessions", "--status", "open")
+
+	if err != nil {
+		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
+	}
+	if !called {
+		t.Fatal("server was not called")
+	}
+	if got := stderr; got != "" {
+		t.Fatalf("stderr = %q, want empty", got)
+	}
+	if got := stdout; !bytes.Contains([]byte(got), []byte(`"id":123`)) {
+		t.Fatalf("stdout = %q, want session id", got)
+	}
+	if got := stdout; !bytes.Contains([]byte(got), []byte(`"status":"open"`)) {
+		t.Fatalf("stdout = %q, want session status", got)
+	}
+}
+
+func TestSessionsIncludesQueryParams(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		if got, want := query.Get("project"), "web"; got != want {
+			t.Fatalf("project query = %q, want %q", got, want)
+		}
+		if got, want := query.Get("limit"), "25"; got != want {
+			t.Fatalf("limit query = %q, want %q", got, want)
+		}
+		if got, want := query.Get("cursor"), "next-1"; got != want {
+			t.Fatalf("cursor query = %q, want %q", got, want)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"results":[],"next_cursor":null,"count":0,"free_tier_truncated":false}`)
+	}))
+	t.Cleanup(srv.Close)
+	setupClient(t, srv)
+
+	_, stderr, err := executeSessions(t, "sessions", "--project", "web", "--limit", "25", "--cursor", "next-1")
+
+	if err != nil {
+		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
+	}
+	if got := stderr; got != "" {
+		t.Fatalf("stderr = %q, want empty", got)
+	}
+}
+
+func TestSessionsInvalidLimitReturnsUsageAndDoesNotCallHTTP(t *testing.T) {
+	for _, limit := range []string{"0", "101"} {
+		t.Run(limit, func(t *testing.T) {
+			var called bool
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				called = true
+				w.WriteHeader(http.StatusInternalServerError)
+			}))
+			t.Cleanup(srv.Close)
+			setupClient(t, srv)
+
+			stdout, stderr, err := executeSessions(t, "sessions", "--limit", limit)
+
+			if err == nil {
+				t.Fatal("Execute() error = nil, want usage error")
+			}
+			if got, want := ExitCode(err), 2; got != want {
+				t.Fatalf("ExitCode() = %d, want %d", got, want)
+			}
+			var usage *errfmt.UsageError
+			if !errors.As(err, &usage) {
+				t.Fatalf("Execute() error = %T, want errfmt.UsageError", err)
+			}
+			if got, want := usage.Message, "--limit must be between 1 and 100"; got != want {
+				t.Fatalf("usage message = %q, want %q", got, want)
+			}
+			if called {
+				t.Fatal("server was called for invalid limit")
+			}
+			if got := stdout; got != "" {
+				t.Fatalf("stdout = %q, want empty", got)
+			}
+			if got := stderr; got != "--limit must be between 1 and 100\n" {
+				t.Fatalf("stderr = %q, want usage message", got)
+			}
+		})
+	}
+}
+
+func TestSessionsPrettyOutput(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{
+			"results":[{
+				"id":123,
+				"project":null,
+				"url":"https://example.test/page",
+				"status":"resolved",
+				"pin_count":0,
+				"first_pin_feedback":"",
+				"reporter":null,
+				"updated_at":"2026-05-01T12:00:00Z",
+				"free_tier_locked":false
+			}],
+			"next_cursor":null,
+			"count":1,
+			"free_tier_truncated":false
+		}`)
+	}))
+	t.Cleanup(srv.Close)
+	setupClient(t, srv)
+
+	stdout, stderr, err := executeSessions(t, "--pretty", "sessions")
+
+	if err != nil {
+		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
+	}
+	if got := stderr; got != "" {
+		t.Fatalf("stderr = %q, want empty", got)
+	}
+	if got := stdout; !bytes.Contains([]byte(got), []byte("{\n  \"results\": [\n    {\n      \"id\": 123")) {
+		t.Fatalf("stdout = %q, want indented JSON", got)
+	}
+}
+
+func setupClient(t *testing.T, srv *httptest.Server) {
+	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("DISBUG_TOKEN", "")
+	t.Setenv("DISBUG_API_URL", "")
+
+	if err := token.Write("default", token.Token{Token: "test-token", APIURL: srv.URL}, false); err != nil {
+		t.Fatalf("token.Write() error = %v", err)
+	}
+}
+
+func executeSessions(t *testing.T, args ...string) (string, string, error) {
+	t.Helper()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := Execute(context.Background(), args, nil, &stdout, &stderr)
+	return stdout.String(), stderr.String(), err
+}
