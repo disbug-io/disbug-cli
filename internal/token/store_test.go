@@ -105,6 +105,14 @@ func TestWriteReadRoundTripAndOverwrite(t *testing.T) {
 		t.Fatalf("Write() error = %v, want ErrProfileExists", err)
 	}
 
+	got, err = Read("default")
+	if err != nil {
+		t.Fatalf("Read() after conflict error = %v", err)
+	}
+	if got != first {
+		t.Fatalf("Read() after conflict = %#v, want %#v", got, first)
+	}
+
 	replacement := Token{Token: "token-2", APIURL: "https://new.example.com"}
 	if err := Write("default", replacement, true); err != nil {
 		t.Fatalf("Write(force) error = %v", err)

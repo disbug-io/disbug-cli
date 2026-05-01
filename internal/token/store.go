@@ -81,14 +81,6 @@ func Write(name string, token Token, force bool) error {
 		return err
 	}
 
-	if !force {
-		if _, err := os.Stat(path); err == nil {
-			return fmt.Errorf("%s: %w", path, ErrProfileExists)
-		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("stat token profile %s: %w", path, err)
-		}
-	}
-
 	dir, err := Dir()
 	if err != nil {
 		return err
@@ -108,8 +100,37 @@ func Write(name string, token Token, force bool) error {
 	}
 	data = append(data, '\n')
 
+	if !force {
+		return writeNewProfile(path, data)
+	}
+
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("write token profile %s: %w", path, err)
+	}
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(path, 0o600); err != nil {
+			return fmt.Errorf("chmod token profile %s: %w", path, err)
+		}
+	}
+
+	return nil
+}
+
+func writeNewProfile(path string, data []byte) error {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) //nolint:gosec // path is built from a validated profile name under the config dir.
+	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return fmt.Errorf("%s: %w", path, ErrProfileExists)
+		}
+		return fmt.Errorf("create token profile %s: %w", path, err)
+	}
+
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("write token profile %s: %w", path, err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close token profile %s: %w", path, err)
 	}
 	if runtime.GOOS != "windows" {
 		if err := os.Chmod(path, 0o600); err != nil {
