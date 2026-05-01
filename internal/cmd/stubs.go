@@ -5,8 +5,6 @@ import "errors"
 var errStub = errors.New("not implemented yet (stub)")
 
 type (
-	// LoginCmd is a placeholder for the login command.
-	LoginCmd struct{}
 	// LogoutCmd is a placeholder for the logout command.
 	LogoutCmd struct{}
 	// WhoamiCmd is a placeholder for the whoami command.
@@ -16,9 +14,6 @@ type (
 	// MCPCmd is a placeholder for the mcp command.
 	MCPCmd struct{}
 )
-
-// Run returns the shared placeholder error.
-func (LoginCmd) Run(bindings) error { return errStub }
 
 // Run returns the shared placeholder error.
 func (LogoutCmd) Run(bindings) error { return errStub }

@@ -22,3 +22,8 @@ func generateState(r io.Reader) (string, error) {
 
 	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
+
+// GenerateState creates a URL-safe CSRF state value.
+func GenerateState(r io.Reader) (string, error) {
+	return generateState(r)
+}
