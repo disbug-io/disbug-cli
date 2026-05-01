@@ -12,9 +12,9 @@ import (
 
 // ListSessionsInput is the input for the list_sessions MCP tool.
 type ListSessionsInput struct {
-	Status  string `json:"status,omitempty" jsonschema:"open|resolved|dismissed"`
-	Project string `json:"project,omitempty"`
-	Limit   int    `json:"limit,omitempty"`
+	Status  string `json:"status,omitempty" jsonschema:"Filter by status: open, resolved, or dismissed"`
+	Project string `json:"project,omitempty" jsonschema:"Filter by project slug"`
+	Limit   int    `json:"limit,omitempty" jsonschema:"Maximum results to return; defaults to 50 and is capped at 100"`
 }
 
 func registerListSessions(srv *sdkmcp.Server, deps *Deps) {
