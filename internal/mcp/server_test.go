@@ -48,6 +48,19 @@ func TestNewServerReturnsServer(t *testing.T) {
 	}
 }
 
+func TestSetVersionOverridesVersionString(t *testing.T) {
+	oldVersionStr := versionStr
+	t.Cleanup(func() {
+		versionStr = oldVersionStr
+	})
+
+	SetVersion("1.2.3")
+
+	if got := versionStr(); got != "1.2.3" {
+		t.Fatalf("versionStr() = %q, want %q", got, "1.2.3")
+	}
+}
+
 func TestResultHelpersReturnTextContent(t *testing.T) {
 	t.Parallel()
 
@@ -108,3 +121,29 @@ func TestRunTreatsServeStdioEOFAsNormal(t *testing.T) {
 		t.Fatalf("stderr = %q, want no mcp loop warning", stderr.String())
 	}
 }
+
+func TestServeStdioWithRespondsBeforeImmediateEOF(t *testing.T) {
+	t.Parallel()
+
+	const initialize = `{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}},"id":1}` + "\n"
+
+	var stdout bytes.Buffer
+	err := serveStdioWith(
+		t.Context(),
+		newServer(nil),
+		io.NopCloser(strings.NewReader(initialize)),
+		nopWriteCloser{Writer: &stdout},
+	)
+	if err != nil {
+		t.Fatalf("serveStdioWith() error = %v, want nil", err)
+	}
+	if got := stdout.String(); !strings.Contains(got, `"id":1`) || !strings.Contains(got, `"serverInfo"`) {
+		t.Fatalf("stdout = %q, want initialize response", got)
+	}
+}
+
+type nopWriteCloser struct {
+	io.Writer
+}
+
+func (nopWriteCloser) Close() error { return nil }

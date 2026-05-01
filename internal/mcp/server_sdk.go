@@ -2,6 +2,9 @@ package mcp
 
 import (
 	"context"
+	"io"
+	"os"
+	"time"
 
 	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -9,6 +12,8 @@ import (
 )
 
 type serveFunc func(context.Context, *mcp.Server) error
+
+const stdioEOFGrace = 100 * time.Millisecond
 
 func newServer(deps *Deps) *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{
@@ -28,7 +33,14 @@ func newServer(deps *Deps) *mcp.Server {
 }
 
 func serveStdio(ctx context.Context, srv *mcp.Server) error {
-	return srv.Run(ctx, &mcp.StdioTransport{})
+	return serveStdioWith(ctx, srv, os.Stdin, stdioWriteCloser{Writer: os.Stdout})
+}
+
+func serveStdioWith(ctx context.Context, srv *mcp.Server, stdin io.ReadCloser, stdout io.WriteCloser) error {
+	return srv.Run(ctx, &mcp.IOTransport{
+		Reader: delayedEOFReadCloser{ReadCloser: stdin, delay: stdioEOFGrace},
+		Writer: stdout,
+	})
 }
 
 func jsonResult(v any) *mcp.CallToolResult {
@@ -43,3 +55,22 @@ func errResult(err error) *mcp.CallToolResult {
 		IsError: true,
 	}
 }
+
+type delayedEOFReadCloser struct {
+	io.ReadCloser
+	delay time.Duration
+}
+
+func (r delayedEOFReadCloser) Read(p []byte) (int, error) {
+	n, err := r.ReadCloser.Read(p)
+	if err == io.EOF && r.delay > 0 {
+		time.Sleep(r.delay)
+	}
+	return n, err
+}
+
+type stdioWriteCloser struct {
+	io.Writer
+}
+
+func (stdioWriteCloser) Close() error { return nil }

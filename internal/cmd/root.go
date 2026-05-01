@@ -10,6 +10,7 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/disbug-io/disbug-cli/internal/errfmt"
+	"github.com/disbug-io/disbug-cli/internal/mcp"
 )
 
 // RootFlags are global flags accepted by every command.
@@ -92,6 +93,7 @@ func Execute(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 		Stderr: stderr,
 		Flags:  &cli.RootFlags,
 	}
+	mcp.SetVersion(VersionString())
 
 	parser, parseErr := kong.New(
 		&cli,

@@ -22,6 +22,9 @@ const defaultAPIURL = "https://disbug.io"
 
 var versionStr = func() string { return "dev" }
 
+// SetVersion is called by the cmd package at startup so the MCP server reports the right version.
+func SetVersion(s string) { versionStr = func() string { return s } }
+
 // Deps holds shared dependencies for MCP tool handlers.
 type Deps struct {
 	Client *client.Client

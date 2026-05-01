@@ -59,14 +59,13 @@ func TestExecuteCompletionBashPlaceholder(t *testing.T) {
 	assert.Empty(t, stderr.String())
 }
 
-func TestExecuteStubCommandReturnsExitCodeOne(t *testing.T) {
+func TestExecuteMCPHelpIncludesCommand(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	err := Execute(context.Background(), []string{"mcp"}, nil, &stdout, &stderr)
+	err := Execute(context.Background(), []string{"mcp", "--help"}, nil, &stdout, &stderr)
 
-	require.Error(t, err)
-	assert.Equal(t, 1, ExitCode(err))
-	assert.Contains(t, stderr.String(), "not implemented yet (stub)")
-	assert.Empty(t, stdout.String())
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), "Run MCP integration commands.")
+	assert.Empty(t, stderr.String())
 }
