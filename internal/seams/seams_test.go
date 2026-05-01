@@ -2,6 +2,7 @@ package seams
 
 import (
 	"bytes"
+	crand "crypto/rand"
 	"io"
 	"net/http"
 	"os"
@@ -11,6 +12,8 @@ import (
 )
 
 func TestDefaultClockHonorsFrozenTime(t *testing.T) {
+	restoreHooks := enableTestHooksForTesting()
+	defer restoreHooks()
 	t.Setenv("DISBUG_TEST_FROZEN_TIME", "2026-01-02T03:04:05Z")
 
 	got := DefaultClock().Now()
@@ -22,6 +25,8 @@ func TestDefaultClockHonorsFrozenTime(t *testing.T) {
 }
 
 func TestDefaultClockFallsBackOnInvalidFrozenTime(t *testing.T) {
+	restoreHooks := enableTestHooksForTesting()
+	defer restoreHooks()
 	t.Setenv("DISBUG_TEST_FROZEN_TIME", "not-rfc3339")
 
 	before := time.Now()
@@ -50,6 +55,8 @@ func TestFixedClockNowAndAdvance(t *testing.T) {
 }
 
 func TestDefaultSleeperHonorsFastSleep(t *testing.T) {
+	restoreHooks := enableTestHooksForTesting()
+	defer restoreHooks()
 	t.Setenv("DISBUG_TEST_FAST_SLEEP", "1")
 
 	start := time.Now()
@@ -62,6 +69,8 @@ func TestDefaultSleeperHonorsFastSleep(t *testing.T) {
 }
 
 func TestDefaultRandomDeterministicSeed(t *testing.T) {
+	restoreHooks := enableTestHooksForTesting()
+	defer restoreHooks()
 	t.Setenv("DISBUG_TEST_DETERMINISTIC_RANDOM", "same-seed")
 
 	first := make([]byte, 32)
@@ -90,6 +99,14 @@ func TestDefaultRandomDeterministicSeed(t *testing.T) {
 	}
 }
 
+func TestDefaultRandomIgnoresDeterministicSeedWithoutTestHooks(t *testing.T) {
+	t.Setenv("DISBUG_TEST_DETERMINISTIC_RANDOM", "same-seed")
+
+	if got := DefaultRandom(); got != crand.Reader {
+		t.Fatalf("DefaultRandom() = %T, want crypto/rand.Reader when test hooks are disabled", got)
+	}
+}
+
 func TestDefaultListenerBindsAndCloses(t *testing.T) {
 	listener, err := DefaultListener()("127.0.0.1:0")
 	if err != nil {
@@ -111,6 +128,8 @@ func TestDefaultHTTPDoer(t *testing.T) {
 }
 
 func TestDefaultBrowserOpenerNoBrowserWritesURLToStderr(t *testing.T) {
+	restoreHooks := enableTestHooksForTesting()
+	defer restoreHooks()
 	t.Setenv("DISBUG_TEST_NO_BROWSER", "1")
 
 	oldStderr := os.Stderr

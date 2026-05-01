@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -51,6 +52,8 @@ func (realSleeper) Sleep(d time.Duration) {
 type noOpSleeper struct{}
 
 func (noOpSleeper) Sleep(time.Duration) {}
+
+var testHooksEnabled atomic.Bool
 
 // FixedClock is a concurrency-safe clock for tests.
 type FixedClock struct {
@@ -190,5 +193,17 @@ func (s *seededReader) Read(p []byte) (int, error) {
 }
 
 func devBuild() bool {
-	return true
+	return testHooksAllowed()
+}
+
+func testHooksAllowed() bool {
+	return testHooksEnabled.Load()
+}
+
+func enableTestHooksForTesting() func() {
+	previous := testHooksEnabled.Swap(true)
+
+	return func() {
+		testHooksEnabled.Store(previous)
+	}
 }
