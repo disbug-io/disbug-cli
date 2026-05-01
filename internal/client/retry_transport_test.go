@@ -98,6 +98,21 @@ func (r closeRecorder) Close() error {
 	return nil
 }
 
+type trackedBody struct {
+	*strings.Reader
+	closed bool
+}
+
+func newTrackedBody(value string) *trackedBody {
+	return &trackedBody{Reader: strings.NewReader(value)}
+}
+
+func (b *trackedBody) Close() error {
+	b.closed = true
+
+	return nil
+}
+
 func TestRetryTransport_DoesNotRetryHTTPStatusWhenContextCancelled(t *testing.T) {
 	sleeper := &recordingSleeper{}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -134,6 +149,79 @@ func TestRetryTransport_DoesNotRetryHTTPStatusWhenContextCancelled(t *testing.T)
 	}
 	if !firstBodyClosed {
 		t.Fatal("first response body closed = false, want true")
+	}
+}
+
+func TestRetryTransport_UsesOriginalBodyForFirstAttemptAndFreshBodiesForRetries(t *testing.T) {
+	sleeper := &recordingSleeper{}
+	originalBody := newTrackedBody("first")
+	retryBodies := []*trackedBody{newTrackedBody("retry")}
+	getBodyCalls := 0
+	base := &sequenceTransport{
+		actions: []func(*http.Request) (*http.Response, error){
+			func(req *http.Request) (*http.Response, error) {
+				if req.Body != originalBody {
+					t.Fatalf("first attempt body = %#v, want original body", req.Body)
+				}
+				if _, err := io.ReadAll(req.Body); err != nil {
+					t.Fatalf("read first body: %v", err)
+				}
+				if err := req.Body.Close(); err != nil {
+					t.Fatalf("close first body: %v", err)
+				}
+
+				return response(http.StatusServiceUnavailable, nil), nil
+			},
+			func(req *http.Request) (*http.Response, error) {
+				if req.Body != retryBodies[0] {
+					t.Fatalf("retry body = %#v, want fresh GetBody body", req.Body)
+				}
+				if req.Body == originalBody {
+					t.Fatal("retry reused original body")
+				}
+				if _, err := io.ReadAll(req.Body); err != nil {
+					t.Fatalf("read retry body: %v", err)
+				}
+				if err := req.Body.Close(); err != nil {
+					t.Fatalf("close retry body: %v", err)
+				}
+
+				return response(http.StatusNoContent, nil), nil
+			},
+		},
+	}
+	transport := newRetryTransport(base, sleeper)
+	req := newRequest(t, context.Background())
+	req.Body = originalBody
+	req.GetBody = func() (io.ReadCloser, error) {
+		getBodyCalls++
+		if getBodyCalls > len(retryBodies) {
+			t.Fatalf("GetBody called %d times, want %d", getBodyCalls, len(retryBodies))
+		}
+
+		return retryBodies[getBodyCalls-1], nil
+	}
+
+	resp, err := transport.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("RoundTrip error = %v, want nil", err)
+	}
+	defer resp.Body.Close()
+
+	if got, want := resp.StatusCode, http.StatusNoContent; got != want {
+		t.Fatalf("status = %d, want %d", got, want)
+	}
+	if !originalBody.closed {
+		t.Fatal("original body closed = false, want true")
+	}
+	if !retryBodies[0].closed {
+		t.Fatal("retry body closed = false, want true")
+	}
+	if got, want := getBodyCalls, 1; got != want {
+		t.Fatalf("GetBody calls = %d, want %d", got, want)
+	}
+	if got, want := base.hitCount(), 2; got != want {
+		t.Fatalf("hits = %d, want %d", got, want)
 	}
 }
 

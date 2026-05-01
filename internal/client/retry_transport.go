@@ -118,15 +118,16 @@ func requestForAttempt(req *http.Request, attempt int) (*http.Request, error) {
 		cloned.Body = req.Body
 		return cloned, nil
 	}
+	if attempt == 0 {
+		cloned.Body = req.Body
+		return cloned, nil
+	}
 
 	body, err := req.GetBody()
 	if err != nil {
 		return nil, err
 	}
 	cloned.Body = body
-	if attempt == 0 {
-		cloned.GetBody = req.GetBody
-	}
 
 	return cloned, nil
 }
