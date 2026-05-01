@@ -65,6 +65,12 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	var lastErr error
 	for attempt := range attempts {
+		if attempt > 0 {
+			if err := req.Context().Err(); err != nil {
+				return nil, err
+			}
+		}
+
 		attemptReq, err := requestForAttempt(req, attempt)
 		if err != nil {
 			return nil, err
@@ -78,6 +84,9 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			}
 
 			sleeper.Sleep(backoffForAttempt(attempt))
+			if err := req.Context().Err(); err != nil {
+				return nil, err
+			}
 			continue
 		}
 
@@ -85,8 +94,15 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return resp, nil
 		}
 
+		if err := req.Context().Err(); err != nil {
+			drainAndClose(resp.Body)
+			return nil, err
+		}
 		drainAndClose(resp.Body)
 		sleeper.Sleep(retryDelay(resp, attempt))
+		if err := req.Context().Err(); err != nil {
+			return nil, err
+		}
 	}
 
 	return nil, lastErr
