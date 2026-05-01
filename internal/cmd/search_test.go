@@ -41,7 +41,6 @@ func TestSearchSessionsDefaultScope(t *testing.T) {
 	setupClient(t, srv)
 
 	stdout, stderr, err := executeSearch(t, "search", "checkout")
-
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}
@@ -97,7 +96,6 @@ func TestSearchPinsScope(t *testing.T) {
 	setupClient(t, srv)
 
 	stdout, stderr, err := executeSearch(t, "search", "checkout", "--scope", "pins", "--limit", "5")
-
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}
@@ -263,7 +261,6 @@ func TestSearchPrettyOutput(t *testing.T) {
 	setupClient(t, srv)
 
 	stdout, stderr, err := executeSearch(t, "--pretty", "search", "checkout")
-
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}

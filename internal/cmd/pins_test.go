@@ -41,7 +41,6 @@ func TestPinsPartialFailureReturnsSuccessWithBulkErrors(t *testing.T) {
 	setupClient(t, srv)
 
 	stdout, stderr, err := executePins(t, "pins", "7392.2", "7392.99")
-
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}
@@ -198,7 +197,6 @@ func TestPinsStyleAFields(t *testing.T) {
 	setupClient(t, srv)
 
 	_, stderr, err := executePins(t, "pins", "7392.2:console", "7392.3:network,events", "7392.4")
-
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}
@@ -233,7 +231,6 @@ func TestPinsDuplicateRefsAreFetchedOnceWithFieldUnion(t *testing.T) {
 	setupClient(t, srv)
 
 	_, stderr, err := executePins(t, "pins", "7392.2:console", "7392.2:network")
-
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}
@@ -296,7 +293,6 @@ func TestPinsPrettyOutput(t *testing.T) {
 	setupClient(t, srv)
 
 	stdout, stderr, err := executePins(t, "--pretty", "pins", "7392.2")
-
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}

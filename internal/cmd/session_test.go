@@ -35,7 +35,6 @@ func TestSessionDetailSuccess(t *testing.T) {
 	setupClient(t, srv)
 
 	stdout, stderr, err := executeSession(t, "session", "7392")
-
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}
@@ -96,7 +95,6 @@ func TestSessionPrettyOutput(t *testing.T) {
 	setupClient(t, srv)
 
 	stdout, stderr, err := executeSession(t, "--pretty", "session", "7392")
-
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}

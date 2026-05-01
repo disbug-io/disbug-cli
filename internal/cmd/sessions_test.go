@@ -46,7 +46,6 @@ func TestSessionsBasicList(t *testing.T) {
 	setupClient(t, srv)
 
 	stdout, stderr, err := executeSessions(t, "sessions", "--status", "open")
-
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}
@@ -84,7 +83,6 @@ func TestSessionsIncludesQueryParams(t *testing.T) {
 	setupClient(t, srv)
 
 	_, stderr, err := executeSessions(t, "sessions", "--project", "web", "--limit", "25", "--cursor", "next-1")
-
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}
@@ -156,7 +154,6 @@ func TestSessionsPrettyOutput(t *testing.T) {
 	setupClient(t, srv)
 
 	stdout, stderr, err := executeSessions(t, "--pretty", "sessions")
-
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}

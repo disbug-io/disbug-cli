@@ -34,7 +34,6 @@ func TestPinFieldsAreWireEncoded(t *testing.T) {
 	setupClient(t, srv)
 
 	stdout, stderr, err := executePin(t, "pin", "7392.2", "--fields", "console,network")
-
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}
@@ -68,7 +67,6 @@ func TestPinFieldsAllOmitsFieldsQuery(t *testing.T) {
 	setupClient(t, srv)
 
 	_, stderr, err := executePin(t, "pin", "7392.2", "--fields", "all")
-
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}
@@ -177,7 +175,6 @@ func TestPinPrettyOutput(t *testing.T) {
 	setupClient(t, srv)
 
 	stdout, stderr, err := executePin(t, "--pretty", "pin", "7392.2", "--fields", "all")
-
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}
