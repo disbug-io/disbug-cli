@@ -22,11 +22,11 @@ var (
 type Token struct {
 	Token          string `json:"token"`
 	APIURL         string `json:"api_url"`
-	AgentName      string `json:"agent_name,omitempty"`
-	Team           string `json:"team,omitempty"`
-	TeamSlug       string `json:"team_slug,omitempty"`
-	CreatedByEmail string `json:"created_by_email,omitempty"`
-	CreatedAt      string `json:"created_at,omitempty"`
+	AgentName      string `json:"agent_name"`
+	Team           string `json:"team"`
+	TeamSlug       string `json:"team_slug"`
+	CreatedByEmail string `json:"created_by_email"`
+	CreatedAt      string `json:"created_at"`
 }
 
 // Read loads a token profile unless DISBUG_TOKEN provides an environment override.

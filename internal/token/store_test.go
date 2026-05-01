@@ -186,6 +186,46 @@ func TestWritePersistsExpectedJSONKeys(t *testing.T) {
 	}
 }
 
+func TestWritePersistsCompleteJSONShapeForMinimalToken(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	if err := Write("default", Token{Token: "token-1", APIURL: "https://api.example.com"}, false); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	path, err := ProfilePath("default")
+	if err != nil {
+		t.Fatalf("ProfilePath() error = %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+
+	want := map[string]any{
+		"token":            "token-1",
+		"api_url":          "https://api.example.com",
+		"agent_name":       "",
+		"team":             "",
+		"team_slug":        "",
+		"created_by_email": "",
+		"created_at":       "",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("persisted keys = %#v, want %#v", got, want)
+	}
+	for key, wantValue := range want {
+		if got[key] != wantValue {
+			t.Fatalf("persisted %q = %#v, want %#v", key, got[key], wantValue)
+		}
+	}
+}
+
 func TestWriteFilePermissions(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("permissions are Unix-specific")
