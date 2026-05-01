@@ -145,6 +145,40 @@ func (b *blockingBody) isClosed() bool {
 	}
 }
 
+type readTrackingBody struct {
+	remaining int64
+	read      int64
+	closed    bool
+}
+
+func newReadTrackingBody(size int64) *readTrackingBody {
+	return &readTrackingBody{remaining: size}
+}
+
+func (b *readTrackingBody) Read(p []byte) (int, error) {
+	if b.remaining == 0 {
+		return 0, io.EOF
+	}
+
+	n := len(p)
+	if int64(n) > b.remaining {
+		n = int(b.remaining)
+	}
+	for i := range p[:n] {
+		p[i] = 'x'
+	}
+	b.remaining -= int64(n)
+	b.read += int64(n)
+
+	return n, nil
+}
+
+func (b *readTrackingBody) Close() error {
+	b.closed = true
+
+	return nil
+}
+
 func TestRetryTransport_DoesNotRetryHTTPStatusWhenContextCancelled(t *testing.T) {
 	sleeper := &recordingSleeper{}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -227,7 +261,10 @@ func TestRetryTransport_ClosesBlockingRetryableBodyWithoutHanging(t *testing.T) 
 	base := &sequenceTransport{
 		actions: []func(*http.Request) (*http.Response, error){
 			func(*http.Request) (*http.Response, error) {
-				return response(http.StatusServiceUnavailable, retryBody), nil
+				resp := response(http.StatusServiceUnavailable, retryBody)
+				resp.ContentLength = -1
+
+				return resp, nil
 			},
 			func(*http.Request) (*http.Response, error) { return response(http.StatusNoContent, nil), nil },
 		},
@@ -263,6 +300,45 @@ func TestRetryTransport_ClosesBlockingRetryableBodyWithoutHanging(t *testing.T) 
 	}
 	if !retryBody.isClosed() {
 		t.Fatal("retryable response body closed = false, want true")
+	}
+	if got, want := base.hitCount(), 2; got != want {
+		t.Fatalf("hits = %d, want %d", got, want)
+	}
+}
+
+func TestRetryTransport_DrainsAtMostCapBeforeClosingRetryableResponse(t *testing.T) {
+	sleeper := &recordingSleeper{}
+	retryBody := newReadTrackingBody((64 << 10) * 2)
+	base := &sequenceTransport{
+		actions: []func(*http.Request) (*http.Response, error){
+			func(*http.Request) (*http.Response, error) {
+				resp := response(http.StatusServiceUnavailable, retryBody)
+				resp.ContentLength = (64 << 10) * 2
+
+				return resp, nil
+			},
+			func(*http.Request) (*http.Response, error) {
+				if got, want := retryBody.read, int64(64<<10); got != want {
+					t.Fatalf("retry body read = %d, want %d", got, want)
+				}
+				if !retryBody.closed {
+					t.Fatal("retry body closed = false, want true")
+				}
+
+				return response(http.StatusNoContent, nil), nil
+			},
+		},
+	}
+	transport := newRetryTransport(base, sleeper)
+
+	resp, err := transport.RoundTrip(newRequest(t, context.Background()))
+	if err != nil {
+		t.Fatalf("RoundTrip error = %v, want nil", err)
+	}
+	defer resp.Body.Close()
+
+	if got, want := resp.StatusCode, http.StatusNoContent; got != want {
+		t.Fatalf("status = %d, want %d", got, want)
 	}
 	if got, want := base.hitCount(), 2; got != want {
 		t.Fatalf("hits = %d, want %d", got, want)

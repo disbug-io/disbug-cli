@@ -20,6 +20,8 @@ var retryBackoffSchedule = []time.Duration{
 	time.Second,
 }
 
+const maxRetryDrainBytes int64 = 64 << 10
+
 type retryTransport struct {
 	base            http.RoundTripper
 	sleeper         seams.Sleeper
@@ -100,10 +102,10 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 
 		if err := req.Context().Err(); err != nil {
-			drainAndClose(resp.Body)
+			drainAndClose(resp)
 			return nil, err
 		}
-		drainAndClose(resp.Body)
+		drainAndClose(resp)
 		if err := waitForRetry(req.Context(), sleeper, useTimerSleeper, retryDelay(resp, attempt)); err != nil {
 			return nil, err
 		}
@@ -244,10 +246,17 @@ func jitter(base time.Duration) time.Duration {
 	return time.Duration(n.Int64())
 }
 
-func drainAndClose(body io.ReadCloser) {
+func drainAndClose(resp *http.Response) {
+	if resp == nil {
+		return
+	}
+	body := resp.Body
 	if body == nil {
 		return
 	}
 
+	if resp.ContentLength > 0 {
+		_, _ = io.Copy(io.Discard, io.LimitReader(body, maxRetryDrainBytes))
+	}
 	_ = body.Close()
 }
