@@ -34,6 +34,10 @@ type Result map[string]any
 
 // Run registers the MCP server and serves stdio JSON-RPC until stdin closes or the process is interrupted.
 func Run(ctx context.Context, profile string, stderr io.Writer) error {
+	return run(ctx, profile, stderr, serveStdio)
+}
+
+func run(ctx context.Context, profile string, stderr io.Writer, serveFn serveFunc) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -75,7 +79,7 @@ func Run(ctx context.Context, profile string, stderr io.Writer) error {
 
 	serveDone := make(chan error, 1)
 	go func() {
-		serveDone <- serveStdioFn(serveCtx, srv)
+		serveDone <- serveFn(serveCtx, srv)
 	}()
 
 	sigCh := make(chan os.Signal, 1)

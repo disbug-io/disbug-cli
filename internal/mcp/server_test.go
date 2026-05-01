@@ -82,18 +82,12 @@ func TestResultHelpersReturnTextContent(t *testing.T) {
 func TestRunLogsServeStdioErrorAndReturnsNil(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
-	originalServeStdioFn := serveStdioFn
-	t.Cleanup(func() {
-		serveStdioFn = originalServeStdioFn
-	})
-	serveStdioFn = func(context.Context, *mcp.Server) error {
-		return errors.New("loop failed")
-	}
-
 	var stderr bytes.Buffer
-	err := Run(context.Background(), "default", &stderr)
+	err := run(context.Background(), "default", &stderr, func(context.Context, *mcp.Server) error {
+		return errors.New("loop failed")
+	})
 	if err != nil {
-		t.Fatalf("Run() error = %v, want nil", err)
+		t.Fatalf("run() error = %v, want nil", err)
 	}
 	if !strings.Contains(stderr.String(), "mcp: loop failed\n") {
 		t.Fatalf("stderr = %q, want mcp loop warning", stderr.String())
@@ -103,18 +97,12 @@ func TestRunLogsServeStdioErrorAndReturnsNil(t *testing.T) {
 func TestRunTreatsServeStdioEOFAsNormal(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
-	originalServeStdioFn := serveStdioFn
-	t.Cleanup(func() {
-		serveStdioFn = originalServeStdioFn
-	})
-	serveStdioFn = func(context.Context, *mcp.Server) error {
-		return io.EOF
-	}
-
 	var stderr bytes.Buffer
-	err := Run(context.Background(), "default", &stderr)
+	err := run(context.Background(), "default", &stderr, func(context.Context, *mcp.Server) error {
+		return io.EOF
+	})
 	if err != nil {
-		t.Fatalf("Run() error = %v, want nil", err)
+		t.Fatalf("run() error = %v, want nil", err)
 	}
 	if strings.Contains(stderr.String(), "mcp:") {
 		t.Fatalf("stderr = %q, want no mcp loop warning", stderr.String())

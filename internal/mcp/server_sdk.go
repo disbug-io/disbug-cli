@@ -8,6 +8,8 @@ import (
 	"github.com/disbug-io/disbug-cli/internal/errfmt"
 )
 
+type serveFunc func(context.Context, *mcp.Server) error
+
 func newServer(deps *Deps) *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "disbug",
@@ -28,8 +30,6 @@ func newServer(deps *Deps) *mcp.Server {
 func serveStdio(ctx context.Context, srv *mcp.Server) error {
 	return srv.Run(ctx, &mcp.StdioTransport{})
 }
-
-var serveStdioFn = serveStdio
 
 func jsonResult(v any) *mcp.CallToolResult {
 	return &mcp.CallToolResult{
