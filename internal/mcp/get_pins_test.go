@@ -123,6 +123,53 @@ func TestGetPins_AllFailedReturnsToolError(t *testing.T) {
 		case "/api/sessions/7392/pins/by-number/2/":
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = io.WriteString(w, `{"code":"not_found","detail":"pin not found"}`)
+		case "/api/sessions/7392/pins/by-number/3/":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = io.WriteString(w, `{"code":"not_found","detail":"pin not found"}`)
+		default:
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+	}))
+	t.Cleanup(backend.Close)
+
+	cli := client.New(backend.URL, "dba_test", "disbug-cli-test", nil, backend.Client(), nil)
+	srv := newServer(&Deps{Client: cli})
+
+	res, err := callTool(t, srv, "get_pins", map[string]any{
+		"items": []map[string]any{{"pin": "7392.2"}, {"pin": "7392.3"}},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(get_pins) error = %v, want nil tool error result", err)
+	}
+	if !res.IsError {
+		t.Fatalf("get_pins IsError = false, want true")
+	}
+	if res.StructuredContent != nil {
+		t.Fatalf("get_pins StructuredContent = %#v, want nil on tool error", res.StructuredContent)
+	}
+	text := firstTextContent(t, res)
+	for _, want := range []string{"all 2 pin fetches failed", "first failure 7392.2", "not found"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("get_pins error content = %q, want %q", text, want)
+		}
+	}
+}
+
+func TestGetPins_AllFailedAuthErrorIsSanitized(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/me/":
+			_, _ = io.WriteString(w, `{
+				"agent_name":"claude-test",
+				"team":"Disbug",
+				"team_slug":"disbug",
+				"api_version":"2026-05-01",
+				"capabilities":["pin_field_selection","pin_by_number"]
+			}`)
+		case "/api/sessions/7392/pins/by-number/2/":
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = io.WriteString(w, `{"code":"auth_required","detail":"token dba_secret_123 was rejected"}`)
 		default:
 			t.Fatalf("unexpected request path: %s", r.URL.Path)
 		}
@@ -143,6 +190,19 @@ func TestGetPins_AllFailedReturnsToolError(t *testing.T) {
 	}
 	if res.StructuredContent != nil {
 		t.Fatalf("get_pins StructuredContent = %#v, want nil on tool error", res.StructuredContent)
+	}
+	text := firstTextContent(t, res)
+	for _, want := range []string{
+		"all 1 pin fetches failed",
+		"first failure 7392.2",
+		"Your token was rejected or no token was found. Run: disbug login",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("get_pins error content = %q, want %q", text, want)
+		}
+	}
+	if strings.Contains(text, "dba_secret_123") || strings.Contains(text, "token dba_secret_123 was rejected") {
+		t.Fatalf("get_pins error content = %q, want sanitized auth detail", text)
 	}
 }
 

@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -77,7 +78,7 @@ func registerGetPins(srv *sdkmcp.Server, deps *Deps) {
 
 		res := deps.Client.GetPinsBulk(ctx, unique)
 		if res.AllFailed() {
-			return nil, client.BulkResult{}, errors.New(errfmt.Format(bulkPinsFailureError(res)))
+			return nil, client.BulkResult{}, errors.New(bulkPinsFailureMessage(res))
 		}
 
 		return jsonResult(res), res, nil
@@ -104,6 +105,20 @@ func bulkPinsFailureError(res client.BulkResult) error {
 		Detail:     first.Message,
 		RequestID:  first.RequestID,
 	}
+}
+
+func bulkPinsFailureMessage(res client.BulkResult) string {
+	underlying := errfmt.Format(bulkPinsFailureError(res))
+	if len(res.Errors) == 0 {
+		return underlying
+	}
+
+	return fmt.Sprintf(
+		"all %d pin fetches failed; first failure %s: %s",
+		len(res.Errors),
+		res.Errors[0].Pin,
+		underlying,
+	)
 }
 
 func statusForBulkPinsExitCode(exitCode int) int {
