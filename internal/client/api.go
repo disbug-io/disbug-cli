@@ -52,6 +52,31 @@ type ListSessionsResponse struct {
 	FreeTierTruncated bool             `json:"free_tier_truncated"`
 }
 
+// SearchParams configures a /api/search/ call.
+type SearchParams struct {
+	Query string
+	Scope string // "sessions" or "pins"; command passes this but methods set wire scope explicitly
+	Limit int
+}
+
+// SearchSessionsResponse is the session search response.
+type SearchSessionsResponse struct {
+	Results []SessionSummary `json:"results"`
+	Total   int              `json:"total"`
+}
+
+// SearchPinsHit is a pin search result with its parent session.
+type SearchPinsHit struct {
+	Pin     PinLite        `json:"pin"`
+	Session SessionSummary `json:"session"`
+}
+
+// SearchPinsResponse is the pin search response.
+type SearchPinsResponse struct {
+	Results []SearchPinsHit `json:"results"`
+	Total   int             `json:"total"`
+}
+
 // ListSessions calls GET /api/sessions/.
 func (c *Client) ListSessions(ctx context.Context, p *ListSessionsParams) (*ListSessionsResponse, error) {
 	path := "/api/sessions/"
@@ -80,6 +105,39 @@ func (c *Client) ListSessions(ctx context.Context, p *ListSessionsParams) (*List
 	}
 
 	return &resp, nil
+}
+
+// SearchSessions calls GET /api/search/ with scope=sessions.
+func (c *Client) SearchSessions(ctx context.Context, p *SearchParams) (*SearchSessionsResponse, error) {
+	var resp SearchSessionsResponse
+	if err := c.doJSON(ctx, http.MethodGet, searchPath(p, "sessions"), nil, &resp); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+// SearchPins calls GET /api/search/ with scope=pins.
+func (c *Client) SearchPins(ctx context.Context, p *SearchParams) (*SearchPinsResponse, error) {
+	var resp SearchPinsResponse
+	if err := c.doJSON(ctx, http.MethodGet, searchPath(p, "pins"), nil, &resp); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+func searchPath(p *SearchParams, scope string) string {
+	query := url.Values{}
+	query.Set("scope", scope)
+	if p != nil {
+		query.Set("q", p.Query)
+		if p.Limit > 0 {
+			query.Set("limit", strconv.Itoa(p.Limit))
+		}
+	}
+
+	return "/api/search/?" + query.Encode()
 }
 
 // PinLite is a compact pin record embedded in session responses.
