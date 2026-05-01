@@ -63,7 +63,7 @@ func TestExecuteStubCommandReturnsExitCodeOne(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	err := Execute(context.Background(), []string{"pins"}, nil, &stdout, &stderr)
+	err := Execute(context.Background(), []string{"search"}, nil, &stdout, &stderr)
 
 	require.Error(t, err)
 	assert.Equal(t, 1, ExitCode(err))
