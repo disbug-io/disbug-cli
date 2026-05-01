@@ -1,0 +1,8 @@
+/bin/
+/dist/
+/.tools/
+*.test
+*.out
+coverage.txt
+.envrc
+.DS_Store
