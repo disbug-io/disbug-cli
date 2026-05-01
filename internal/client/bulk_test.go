@@ -99,6 +99,96 @@ func TestGetPinsBulkAllFailed(t *testing.T) {
 	}
 }
 
+func TestGetPinsBulkPreCanceledContextReportsEveryPin(t *testing.T) {
+	c := New("https://api.example.test", "t", "test", nil, doerFunc(func(*http.Request) (*http.Response, error) {
+		t.Fatal("HTTP doer should not be called for a pre-canceled context")
+		return nil, nil
+	}), nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result := c.GetPinsBulk(ctx, []ref.PinFetch{
+		{Pin: ref.PinRef{Session: 10, Pin: 1}, Fields: []string{"all"}},
+		{Pin: ref.PinRef{Session: 10, Pin: 2}, Fields: []string{"all"}},
+	})
+
+	if got, want := len(result.Pins), 0; got != want {
+		t.Fatalf("len(Pins) = %d, want %d", got, want)
+	}
+	if got, want := len(result.Errors), 2; got != want {
+		t.Fatalf("len(Errors) = %d, want %d", got, want)
+	}
+	if got, want := result.Errors[0].Pin, "10.1"; got != want {
+		t.Fatalf("Errors[0].Pin = %q, want %q", got, want)
+	}
+	if got, want := result.Errors[1].Pin, "10.2"; got != want {
+		t.Fatalf("Errors[1].Pin = %q, want %q", got, want)
+	}
+	for i, item := range result.Errors {
+		if got, want := item.Code, "network_error"; got != want {
+			t.Fatalf("Errors[%d].Code = %q, want %q", i, got, want)
+		}
+		if item.Message == "" {
+			t.Fatalf("Errors[%d].Message is empty, want cancellation message", i)
+		}
+	}
+	if !result.AllFailed() {
+		t.Fatal("AllFailed() = false, want true")
+	}
+	if got, want := result.FirstFailureExitCode(), 5; got != want {
+		t.Fatalf("FirstFailureExitCode() = %d, want %d", got, want)
+	}
+}
+
+func TestGetPinsBulkCancellationBeforeAllDispatchReportsUndispatchedPins(t *testing.T) {
+	t.Setenv("DISBUG_BULK_CONCURRENCY", "1")
+	firstRequestStarted := make(chan struct{})
+	var signalFirstRequestOnce sync.Once
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		signalFirstRequestOnce.Do(func() {
+			close(firstRequestStarted)
+		})
+		<-r.Context().Done()
+	}))
+	t.Cleanup(server.Close)
+
+	c := New(server.URL, "t", "test", nil, server.Client(), nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan BulkResult, 1)
+	go func() {
+		done <- c.GetPinsBulk(ctx, []ref.PinFetch{
+			{Pin: ref.PinRef{Session: 10, Pin: 1}, Fields: []string{"all"}},
+			{Pin: ref.PinRef{Session: 10, Pin: 2}, Fields: []string{"all"}},
+			{Pin: ref.PinRef{Session: 10, Pin: 3}, Fields: []string{"all"}},
+		})
+	}()
+
+	<-firstRequestStarted
+	cancel()
+	result := <-done
+
+	if got, want := len(result.Pins), 0; got != want {
+		t.Fatalf("len(Pins) = %d, want %d", got, want)
+	}
+	if got, want := len(result.Errors), 3; got != want {
+		t.Fatalf("len(Errors) = %d, want %d", got, want)
+	}
+	for i, wantPin := range []string{"10.1", "10.2", "10.3"} {
+		if got := result.Errors[i].Pin; got != wantPin {
+			t.Fatalf("Errors[%d].Pin = %q, want %q", i, got, wantPin)
+		}
+		if got, want := result.Errors[i].Code, "network_error"; got != want {
+			t.Fatalf("Errors[%d].Code = %q, want %q", i, got, want)
+		}
+	}
+	if !result.AllFailed() {
+		t.Fatal("AllFailed() = false, want true")
+	}
+	if got, want := result.FirstFailureExitCode(), 5; got != want {
+		t.Fatalf("FirstFailureExitCode() = %d, want %d", got, want)
+	}
+}
+
 func TestBulkConcurrencyEnv(t *testing.T) {
 	tests := []struct {
 		name     string

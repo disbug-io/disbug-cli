@@ -114,12 +114,15 @@ sendJobs:
 	wg.Wait()
 
 	var result BulkResult
-	for _, itemResult := range results {
+	ctxErr := ctx.Err()
+	for index, itemResult := range results {
 		switch {
 		case itemResult.ok:
 			result.Pins = append(result.Pins, itemResult.pin)
 		case itemResult.err.Code != "":
 			result.Errors = append(result.Errors, itemResult.err)
+		case ctxErr != nil:
+			result.Errors = append(result.Errors, bulkErrItem(items[index].Pin, ctxErr))
 		}
 	}
 
