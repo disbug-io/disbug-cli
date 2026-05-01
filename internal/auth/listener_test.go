@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -184,6 +185,35 @@ func TestListenerWaitTimeoutReturnsError(t *testing.T) {
 	_, err = listener.Wait(context.Background(), 10*time.Millisecond)
 	if err == nil {
 		t.Fatal("Wait() error = nil, want timeout error")
+	}
+}
+
+func TestListenerCloseUnblocksWaitWithoutTimeout(t *testing.T) {
+	listener, err := NewListener("STATE123", []byte("ok"), []byte("err"), "", nil, nil)
+	if err != nil {
+		t.Fatalf("NewListener() error = %v, want nil", err)
+	}
+	t.Cleanup(func() {
+		_ = listener.Close()
+	})
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := listener.Wait(context.Background(), 0)
+		errCh <- err
+	}()
+
+	if err := listener.Close(); err != nil {
+		t.Fatalf("Close() error = %v, want nil", err)
+	}
+
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, http.ErrServerClosed) {
+			t.Fatalf("Wait() error = %v, want http.ErrServerClosed", err)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("Wait() did not return after Close()")
 	}
 }
 

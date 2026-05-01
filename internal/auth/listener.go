@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/disbug-io/disbug-cli/internal/seams"
@@ -29,6 +30,8 @@ type Listener struct {
 	listener  net.Listener
 	server    *http.Server
 	results   chan CallbackResult
+	done      chan struct{}
+	closeOnce sync.Once
 	sleeper   seams.Sleeper
 }
 
@@ -61,6 +64,7 @@ func NewListener(
 		errorPage: errorPage,
 		listener:  netListener,
 		results:   make(chan CallbackResult, 1),
+		done:      make(chan struct{}),
 		sleeper:   sleeper,
 	}
 
@@ -113,6 +117,8 @@ func (l *Listener) Wait(ctx context.Context, timeout time.Duration) (CallbackRes
 	select {
 	case result := <-l.results:
 		return result, nil
+	case <-l.done:
+		return CallbackResult{}, http.ErrServerClosed
 	case <-ctx.Done():
 		return CallbackResult{}, ctx.Err()
 	case <-timeoutC:
@@ -128,7 +134,12 @@ func (l *Listener) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	return l.server.Shutdown(ctx)
+	err := l.server.Shutdown(ctx)
+	l.closeOnce.Do(func() {
+		close(l.done)
+	})
+
+	return err
 }
 
 func BindFreePort() (int, error) {
@@ -189,6 +200,7 @@ func (l *Listener) handleCallback(w http.ResponseWriter, r *http.Request) {
 	if gotState != l.state {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write(l.errorPage)
+		// A state mismatch is intentionally terminal: it indicates a failed auth attempt or CSRF mismatch.
 		l.sendResult(CallbackResult{Err: errors.New("state mismatch")})
 		return
 	}
