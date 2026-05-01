@@ -1,0 +1,561 @@
+openapi: 3.0.3
+info:
+  title: Disbug Backend Agent API
+  version: 0.1.0
+  description: Contract fixture for the standalone CLI client.
+servers:
+  - url: https://api.disbug.io
+security:
+  - bearerAuth: []
+paths:
+  /api/me/:
+    get:
+      operationId: GetMe
+      summary: Get the current authenticated user and team context.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user and team context.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/agent/revoke/:
+    post:
+      operationId: RevokeToken
+      summary: Revoke the current agent token.
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Token revoked.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/search/:
+    get:
+      operationId: Search
+      summary: Search sessions or pins.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query text.
+          schema:
+            type: string
+            minLength: 1
+        - name: scope
+          in: query
+          required: false
+          description: Search scope.
+          schema:
+            type: string
+            enum:
+              - sessions
+              - pins
+            default: sessions
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return.
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 50
+      responses:
+        "200":
+          description: Search results for the selected scope.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/SearchSessionsResponse"
+                  - $ref: "#/components/schemas/SearchPinsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/sessions/:
+    get:
+      operationId: ListSessions
+      summary: List accessible sessions.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter sessions by lifecycle status.
+          schema:
+            type: string
+        - name: project
+          in: query
+          required: false
+          description: Filter sessions by project identifier or slug.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of sessions to return.
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 50
+        - name: cursor
+          in: query
+          required: false
+          description: Cursor from a previous list response.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated session summaries.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSessionsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/sessions/{id}/:
+    get:
+      operationId: GetSession
+      summary: Get a session detail.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionID"
+      responses:
+        "200":
+          description: Session detail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/sessions/{id}/pins/by-number/{n}/:
+    get:
+      operationId: GetPinByNumber
+      summary: Get a pin by its display number within a session.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionID"
+        - name: n
+          in: path
+          required: true
+          description: Pin number within the session.
+          schema:
+            type: integer
+            minimum: 1
+        - name: fields
+          in: query
+          required: false
+          description: Optional expanded fields to include. Wire values are console_logs, network_logs, user_events, session_replay, voice_note, video_recording, and screenshot.
+          schema:
+            type: string
+            enum:
+              - console_logs
+              - network_logs
+              - user_events
+              - session_replay
+              - voice_note
+              - video_recording
+              - screenshot
+      responses:
+        "200":
+          description: Pin detail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PinFull"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/sessions/{id}/pins/{pid}/:
+    get:
+      operationId: GetPin
+      summary: Get a pin by its backend identifier.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionID"
+        - name: pid
+          in: path
+          required: true
+          description: Pin identifier.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pin detail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PinFull"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: token
+  parameters:
+    SessionID:
+      name: id
+      in: path
+      required: true
+      description: Session identifier.
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: Request validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Unauthorized:
+      description: Authentication is required or the token is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFound:
+      description: The requested resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              enum:
+                - bad_request
+                - auth_required
+                - token_revoked
+                - owner_team_lost
+                - agent_read_only
+                - free_tier_locked
+                - not_found
+                - rate_limited
+                - internal_error
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+    Me:
+      type: object
+      required:
+        - id
+        - email
+        - team_id
+        - team_slug
+        - plan
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+          nullable: true
+        team_id:
+          type: string
+        team_slug:
+          type: string
+        team_name:
+          type: string
+          nullable: true
+        plan:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+    Project:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+          nullable: true
+    Reporter:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+    ListSessionsResponse:
+      type: object
+      required:
+        - results
+        - next_cursor
+        - count
+        - free_tier_truncated
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionSummary"
+        next_cursor:
+          type: string
+          nullable: true
+        count:
+          type: integer
+          minimum: 0
+        free_tier_truncated:
+          type: boolean
+    SessionSummary:
+      type: object
+      required:
+        - id
+        - title
+        - status
+        - created_at
+        - updated_at
+        - project
+        - pin_count
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        project:
+          $ref: "#/components/schemas/Project"
+        reporter:
+          $ref: "#/components/schemas/Reporter"
+        pin_count:
+          type: integer
+          minimum: 0
+        url:
+          type: string
+          format: uri
+          nullable: true
+    SessionDetail:
+      allOf:
+        - $ref: "#/components/schemas/SessionSummary"
+        - type: object
+          required:
+            - pins
+          properties:
+            description:
+              type: string
+              nullable: true
+            browser:
+              type: string
+              nullable: true
+            os:
+              type: string
+              nullable: true
+            viewport:
+              type: string
+              nullable: true
+            pins:
+              type: array
+              items:
+                $ref: "#/components/schemas/PinLite"
+    PinLite:
+      type: object
+      required:
+        - id
+        - number
+        - title
+        - created_at
+      properties:
+        id:
+          type: string
+        number:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        url:
+          type: string
+          format: uri
+          nullable: true
+        screenshot:
+          $ref: "#/components/schemas/Asset"
+    PinFull:
+      allOf:
+        - $ref: "#/components/schemas/PinLite"
+        - type: object
+          properties:
+            description:
+              type: string
+              nullable: true
+            console_logs:
+              type: array
+              items:
+                $ref: "#/components/schemas/ConsoleLogItem"
+            network_logs:
+              type: array
+              items:
+                $ref: "#/components/schemas/NetworkLogItem"
+            user_events:
+              type: array
+              items:
+                $ref: "#/components/schemas/UserEventItem"
+            session_replay:
+              $ref: "#/components/schemas/Asset"
+            voice_note:
+              $ref: "#/components/schemas/Asset"
+            video_recording:
+              $ref: "#/components/schemas/Asset"
+            assets:
+              type: array
+              items:
+                $ref: "#/components/schemas/Asset"
+    Asset:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          format: uri
+        content_type:
+          type: string
+          nullable: true
+        size_bytes:
+          type: integer
+          minimum: 0
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+    ConsoleLogItem:
+      type: object
+      required:
+        - level
+        - message
+        - timestamp
+      properties:
+        level:
+          type: string
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        source:
+          type: string
+          nullable: true
+    NetworkLogItem:
+      type: object
+      required:
+        - method
+        - url
+        - status
+        - timestamp
+      properties:
+        method:
+          type: string
+        url:
+          type: string
+          format: uri
+        status:
+          type: integer
+        duration_ms:
+          type: number
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+    UserEventItem:
+      type: object
+      required:
+        - type
+        - timestamp
+      properties:
+        type:
+          type: string
+        selector:
+          type: string
+          nullable: true
+        value:
+          type: string
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+    SearchSessionsResponse:
+      type: object
+      required:
+        - scope
+        - results
+      properties:
+        scope:
+          type: string
+          enum:
+            - sessions
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionSummary"
+    SearchPinsResponse:
+      type: object
+      required:
+        - scope
+        - results
+      properties:
+        scope:
+          type: string
+          enum:
+            - pins
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/PinLite"
