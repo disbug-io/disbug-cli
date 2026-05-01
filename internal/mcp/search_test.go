@@ -127,7 +127,7 @@ func TestSearchSessions_CapsLimitAndAcceptsPinsScope(t *testing.T) {
 	if got, want := query.Get("q"), "mobile safari"; got != want {
 		t.Fatalf("q query = %q, want %q", got, want)
 	}
-	if got, want := query.Get("scope"), "sessions"; got != want {
+	if got, want := query.Get("scope"), "pins"; got != want {
 		t.Fatalf("scope query = %q, want %q", got, want)
 	}
 	if got, want := query.Get("limit"), "50"; got != want {

@@ -107,10 +107,14 @@ func (c *Client) ListSessions(ctx context.Context, p *ListSessionsParams) (*List
 	return &resp, nil
 }
 
-// SearchSessions calls GET /api/search/ with scope=sessions.
+// SearchSessions calls GET /api/search/ with scope=sessions unless p.Scope is set.
 func (c *Client) SearchSessions(ctx context.Context, p *SearchParams) (*SearchSessionsResponse, error) {
 	var resp SearchSessionsResponse
-	if err := c.doJSON(ctx, http.MethodGet, searchPath(p, "sessions"), nil, &resp); err != nil {
+	scope := "sessions"
+	if p != nil && p.Scope != "" {
+		scope = p.Scope
+	}
+	if err := c.doJSON(ctx, http.MethodGet, searchPath(p, scope), nil, &resp); err != nil {
 		return nil, err
 	}
 

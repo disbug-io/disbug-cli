@@ -130,7 +130,7 @@ func TestSearchSessionsSendsQueryParamsAndDecodesTotal(t *testing.T) {
 		if got, want := query.Get("q"), "checkout"; got != want {
 			t.Fatalf("q query = %q, want %q", got, want)
 		}
-		if got, want := query.Get("scope"), "sessions"; got != want {
+		if got, want := query.Get("scope"), "pins"; got != want {
 			t.Fatalf("scope query = %q, want %q", got, want)
 		}
 		if got, want := query.Get("limit"), "10"; got != want {
@@ -173,6 +173,31 @@ func TestSearchSessionsSendsQueryParamsAndDecodesTotal(t *testing.T) {
 	}
 	if got, want := resp.Results[0].FirstPinFeedback, "checkout broken"; got != want {
 		t.Fatalf("FirstPinFeedback = %q, want %q", got, want)
+	}
+}
+
+func TestSearchSessionsDefaultsScopeToSessions(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got, want := r.URL.Path, "/api/search/"; got != want {
+			t.Fatalf("path = %q, want %q", got, want)
+		}
+		if got, want := r.URL.Query().Get("scope"), "sessions"; got != want {
+			t.Fatalf("scope query = %q, want %q", got, want)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"results":[],"total":0}`)
+	}))
+	t.Cleanup(server.Close)
+
+	c := New(server.URL, "t", "test", nil, server.Client(), nil)
+
+	resp, err := c.SearchSessions(context.Background(), &SearchParams{Query: "checkout"})
+	if err != nil {
+		t.Fatalf("SearchSessions() error = %v, want nil", err)
+	}
+	if got, want := resp.Total, 0; got != want {
+		t.Fatalf("Total = %d, want %d", got, want)
 	}
 }
 
