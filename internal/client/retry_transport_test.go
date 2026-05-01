@@ -306,6 +306,56 @@ func TestRetryTransport_ClosesBlockingRetryableBodyWithoutHanging(t *testing.T) 
 	}
 }
 
+func TestRetryTransport_ClosesPositiveContentLengthBlockingBodyWithoutHanging(t *testing.T) {
+	sleeper := &recordingSleeper{}
+	retryBody := newBlockingBody()
+	base := &sequenceTransport{
+		actions: []func(*http.Request) (*http.Response, error){
+			func(*http.Request) (*http.Response, error) {
+				resp := response(http.StatusServiceUnavailable, retryBody)
+				resp.ContentLength = maxRetryDrainBytes
+
+				return resp, nil
+			},
+			func(*http.Request) (*http.Response, error) { return response(http.StatusNoContent, nil), nil },
+		},
+	}
+	transport := newRetryTransport(base, sleeper)
+
+	done := make(chan struct{})
+	var status int
+	var err error
+	go func() {
+		defer close(done)
+		resp, roundTripErr := transport.RoundTrip(newRequest(t, context.Background()))
+		err = roundTripErr
+		if resp != nil {
+			status = resp.StatusCode
+			_ = resp.Body.Close()
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+		_ = retryBody.Close()
+		<-done
+		t.Fatal("RoundTrip hung draining positive content-length retryable response body")
+	}
+	if err != nil {
+		t.Fatalf("RoundTrip error = %v, want nil", err)
+	}
+	if got, want := status, http.StatusNoContent; got != want {
+		t.Fatalf("status = %d, want %d", got, want)
+	}
+	if !retryBody.isClosed() {
+		t.Fatal("retryable response body closed = false, want true")
+	}
+	if got, want := base.hitCount(), 2; got != want {
+		t.Fatalf("hits = %d, want %d", got, want)
+	}
+}
+
 func TestRetryTransport_DrainsAtMostCapBeforeClosingRetryableResponse(t *testing.T) {
 	sleeper := &recordingSleeper{}
 	retryBody := newReadTrackingBody((64 << 10) * 2)
@@ -342,6 +392,56 @@ func TestRetryTransport_DrainsAtMostCapBeforeClosingRetryableResponse(t *testing
 	}
 	if got, want := base.hitCount(), 2; got != want {
 		t.Fatalf("hits = %d, want %d", got, want)
+	}
+}
+
+func TestRetryTransport_DoesNotRetryContextCanceledErrorFromBase(t *testing.T) {
+	sleeper := &recordingSleeper{}
+	base := &sequenceTransport{
+		actions: []func(*http.Request) (*http.Response, error){
+			func(*http.Request) (*http.Response, error) { return nil, context.Canceled },
+			func(*http.Request) (*http.Response, error) { return response(http.StatusNoContent, nil), nil },
+		},
+	}
+	transport := newRetryTransport(base, sleeper)
+
+	resp, err := transport.RoundTrip(newRequest(t, context.Background()))
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("RoundTrip error = %v, want context canceled", err)
+	}
+	if got, want := base.hitCount(), 1; got != want {
+		t.Fatalf("hits = %d, want %d", got, want)
+	}
+	if got := sleeper.count(); got != 0 {
+		t.Fatalf("sleeps = %d, want 0", got)
+	}
+}
+
+func TestRetryTransport_DoesNotRetryContextDeadlineExceededErrorFromBase(t *testing.T) {
+	sleeper := &recordingSleeper{}
+	base := &sequenceTransport{
+		actions: []func(*http.Request) (*http.Response, error){
+			func(*http.Request) (*http.Response, error) { return nil, context.DeadlineExceeded },
+			func(*http.Request) (*http.Response, error) { return response(http.StatusNoContent, nil), nil },
+		},
+	}
+	transport := newRetryTransport(base, sleeper)
+
+	resp, err := transport.RoundTrip(newRequest(t, context.Background()))
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("RoundTrip error = %v, want context deadline exceeded", err)
+	}
+	if got, want := base.hitCount(), 1; got != want {
+		t.Fatalf("hits = %d, want %d", got, want)
+	}
+	if got := sleeper.count(); got != 0 {
+		t.Fatalf("sleeps = %d, want 0", got)
 	}
 }
 

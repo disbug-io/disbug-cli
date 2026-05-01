@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -20,7 +21,10 @@ var retryBackoffSchedule = []time.Duration{
 	time.Second,
 }
 
-const maxRetryDrainBytes int64 = 64 << 10
+const (
+	maxRetryDrainBytes    int64 = 64 << 10
+	maxRetryDrainDuration       = 10 * time.Millisecond
+)
 
 type retryTransport struct {
 	base            http.RoundTripper
@@ -87,7 +91,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		resp, err := base.RoundTrip(attemptReq)
 		if err != nil {
 			lastErr = err
-			if req.Context().Err() != nil || attempt == attempts-1 {
+			if isTerminalContextError(err) || req.Context().Err() != nil || attempt == attempts-1 {
 				return resp, err
 			}
 
@@ -154,6 +158,10 @@ func retryDelay(resp *http.Response, attempt int) time.Duration {
 	}
 
 	return backoffForAttempt(attempt)
+}
+
+func isTerminalContextError(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
 func parseRetryAfter(value string) (time.Duration, bool) {
@@ -256,7 +264,16 @@ func drainAndClose(resp *http.Response) {
 	}
 
 	if resp.ContentLength > 0 {
-		_, _ = io.Copy(io.Discard, io.LimitReader(body, maxRetryDrainBytes))
+		drained := make(chan struct{})
+		go func() {
+			defer close(drained)
+			_, _ = io.Copy(io.Discard, io.LimitReader(body, maxRetryDrainBytes))
+		}()
+
+		select {
+		case <-drained:
+		case <-time.After(maxRetryDrainDuration):
+		}
 	}
 	_ = body.Close()
 }
