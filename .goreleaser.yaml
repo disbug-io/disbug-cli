@@ -1,0 +1,51 @@
+version: 2
+project_name: disbug
+
+builds:
+  - id: disbug
+    main: ./cmd/disbug
+    binary: disbug
+    env: [CGO_ENABLED=0]
+    ldflags: >-
+      -s -w
+      -X github.com/disbug-io/disbug-cli/internal/cmd.version={{.Tag}}
+      -X github.com/disbug-io/disbug-cli/internal/cmd.commit={{.ShortCommit}}
+      -X github.com/disbug-io/disbug-cli/internal/cmd.date={{.Date}}
+    targets:
+      - darwin_amd64
+      - darwin_arm64
+      - linux_amd64
+      - linux_arm64
+      - windows_amd64
+      - windows_arm64
+
+archives:
+  - formats: tar.gz
+    name_template: "{{.ProjectName}}_{{.Version}}_{{.Os}}_{{.Arch}}"
+    format_overrides:
+      - goos: windows
+        formats: zip
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  disable: true
+
+homebrew_casks:
+  - repository:
+      owner: disbug-io
+      name: homebrew-tap
+    homepage: https://disbug.io
+    description: Disbug CLI and MCP server for AI coding agents
+    license: MIT
+    binaries:
+      - disbug
+
+scoops:
+  - repository:
+      owner: disbug-io
+      name: scoop-bucket
+    homepage: https://disbug.io
+    description: Disbug CLI and MCP server for AI coding agents
+    license: MIT
