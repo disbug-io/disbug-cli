@@ -25,7 +25,7 @@ func TestParseSession(t *testing.T) {
 		})
 	}
 
-	for _, arg := range []string{"", "abc", "-3", "7392.2", "7392 "} {
+	for _, arg := range []string{"", "abc", "-3", "0", "7392.2", "7392 "} {
 		t.Run("rejects "+arg, func(t *testing.T) {
 			_, err := ParseSession(arg)
 
@@ -53,7 +53,7 @@ func TestParsePin(t *testing.T) {
 		})
 	}
 
-	for _, arg := range []string{"", "7392", "7392.", ".2", "7392.2.3", "7392.x", "a.b"} {
+	for _, arg := range []string{"", "7392", "7392.", ".2", "0.1", "1.0", "7392.2.3", "7392.x", "a.b"} {
 		t.Run("rejects "+arg, func(t *testing.T) {
 			_, err := ParsePin(arg)
 
@@ -102,6 +102,7 @@ func TestNormalizeFields(t *testing.T) {
 
 func TestNormalizeFieldsRejectsInvalidFields(t *testing.T) {
 	tests := [][]string{
+		{},
 		{""},
 		{" "},
 		{"unknown"},

@@ -106,6 +106,10 @@ func ParsePinFetch(arg string, defaultFields []string) (PinFetch, error) {
 
 // NormalizeFields validates fields, removes duplicates, and returns canonical order.
 func NormalizeFields(fields []string) ([]string, error) {
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("empty field list")
+	}
+
 	seen := make(map[string]bool, len(fields))
 	hasAll := false
 
