@@ -180,6 +180,32 @@ func TestClient_MeSendsHeadersAndDecodesResponse(t *testing.T) {
 	}
 }
 
+func TestClient_RevokeTokenPostsRevokeEndpoint(t *testing.T) {
+	requests := make(chan *http.Request, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- r.Clone(r.Context())
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(server.Close)
+
+	c := New(server.URL+"/", "dba_test", "disbug-cli-test", nil, server.Client(), nil)
+
+	if err := c.RevokeToken(context.Background()); err != nil {
+		t.Fatalf("RevokeToken() error = %v, want nil", err)
+	}
+
+	req := <-requests
+	if got, want := req.Method, http.MethodPost; got != want {
+		t.Fatalf("request method = %q, want %q", got, want)
+	}
+	if got, want := req.URL.Path, "/api/agent/revoke/"; got != want {
+		t.Fatalf("request path = %q, want %q", got, want)
+	}
+	if got, want := req.Header.Get("Authorization"), "Bearer dba_test"; got != want {
+		t.Fatalf("Authorization = %q, want %q", got, want)
+	}
+}
+
 func TestClient_DoJSONSetsContentTypeWithBody(t *testing.T) {
 	var gotContentType string
 	c := New("https://api.example.test", "dba_test", "disbug-cli-test", nil, doerFunc(func(req *http.Request) (*http.Response, error) {

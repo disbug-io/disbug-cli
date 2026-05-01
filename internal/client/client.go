@@ -108,6 +108,11 @@ func (c *Client) Me(ctx context.Context) (*Me, error) {
 	return &me, nil
 }
 
+// RevokeToken revokes the agent token currently in use.
+func (c *Client) RevokeToken(ctx context.Context) error {
+	return c.doJSON(ctx, http.MethodPost, "/api/agent/revoke/", nil, nil)
+}
+
 // HasCapability reports whether the API advertised a capability.
 func (m *Me) HasCapability(name string) bool {
 	if m == nil {
