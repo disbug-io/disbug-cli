@@ -1,6 +1,7 @@
 package token
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -37,6 +38,39 @@ func TestProfilePathUsesXDGConfigHome(t *testing.T) {
 	}
 
 	want := filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "disbug", "default.json")
+	if got != want {
+		t.Fatalf("ProfilePath() = %q, want %q", got, want)
+	}
+}
+
+func TestProfilePathWhitespaceXDGConfigHomeFallsBackToUserConfigDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", "   ")
+
+	var wantRoot string
+	switch runtime.GOOS {
+	case "windows":
+		t.Setenv("APPDATA", home)
+		wantRoot = home
+	case "darwin":
+		t.Setenv("HOME", home)
+		wantRoot = filepath.Join(home, "Library", "Application Support")
+	default:
+		t.Setenv("HOME", home)
+		wantRoot = filepath.Join(home, ".config")
+	}
+
+	got, err := ProfilePath("default")
+	if err != nil {
+		t.Fatalf("ProfilePath() error = %v", err)
+	}
+
+	whitespacePath := filepath.Join("   ", "disbug", "default.json")
+	if got == whitespacePath {
+		t.Fatalf("ProfilePath() = %q, should not use whitespace XDG_CONFIG_HOME", got)
+	}
+
+	want := filepath.Join(wantRoot, "disbug", "default.json")
 	if got != want {
 		t.Fatalf("ProfilePath() = %q, want %q", got, want)
 	}
@@ -82,6 +116,73 @@ func TestWriteReadRoundTripAndOverwrite(t *testing.T) {
 	}
 	if got != replacement {
 		t.Fatalf("Read() after force = %#v, want %#v", got, replacement)
+	}
+}
+
+func TestReadAppliesAPIURLEnvOverrideToStoredProfile(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("DISBUG_API_URL", "https://env.example.com")
+
+	if err := Write("default", Token{Token: "stored-token", APIURL: "https://stored.example.com"}, false); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	got, err := Read("default")
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+
+	if got.APIURL != "https://env.example.com" {
+		t.Fatalf("Read().APIURL = %q, want env override", got.APIURL)
+	}
+}
+
+func TestWritePersistsExpectedJSONKeys(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	token := Token{
+		Token:          "token-1",
+		APIURL:         "https://api.example.com",
+		AgentName:      "agent",
+		Team:           "Team",
+		TeamSlug:       "team",
+		CreatedByEmail: "user@example.com",
+		CreatedAt:      "2026-01-02T03:04:05Z",
+	}
+	if err := Write("default", token, false); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	path, err := ProfilePath("default")
+	if err != nil {
+		t.Fatalf("ProfilePath() error = %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+
+	want := map[string]any{
+		"token":            "token-1",
+		"api_url":          "https://api.example.com",
+		"agent_name":       "agent",
+		"team":             "Team",
+		"team_slug":        "team",
+		"created_by_email": "user@example.com",
+		"created_at":       "2026-01-02T03:04:05Z",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("persisted keys = %#v, want %#v", got, want)
+	}
+	for key, wantValue := range want {
+		if got[key] != wantValue {
+			t.Fatalf("persisted %q = %#v, want %#v", key, got[key], wantValue)
+		}
 	}
 }
 
