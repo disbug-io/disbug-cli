@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
+	"github.com/disbug-io/disbug-cli/internal/errfmt"
 )
 
 // Set at build time via -ldflags.
@@ -27,10 +29,7 @@ func Execute(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 	return errors.New("not implemented")
 }
 
-// ExitCode returns the exit code for the given error. Stub — replaced in Task 1.4.
+// ExitCode returns the exit code for the given error.
 func ExitCode(err error) int {
-	if err == nil {
-		return 0
-	}
-	return 1
+	return errfmt.ExitCode(err)
 }
