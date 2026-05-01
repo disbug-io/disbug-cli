@@ -101,6 +101,7 @@ func TestDefaultRandomDeterministicSeed(t *testing.T) {
 }
 
 func TestDefaultRandomIgnoresDeterministicSeedWithoutTestHooks(t *testing.T) {
+	disableTestHooksForTest(t)
 	t.Setenv("DISBUG_TEST_DETERMINISTIC_RANDOM", "same-seed")
 
 	if got := DefaultRandom(); got != crand.Reader {
@@ -109,6 +110,7 @@ func TestDefaultRandomIgnoresDeterministicSeedWithoutTestHooks(t *testing.T) {
 }
 
 func TestDefaultClockIgnoresFrozenTimeWithoutTestHooks(t *testing.T) {
+	disableTestHooksForTest(t)
 	t.Setenv("DISBUG_TEST_FROZEN_TIME", "2026-01-02T03:04:05Z")
 
 	if _, ok := DefaultClock().(*FixedClock); ok {
@@ -117,6 +119,7 @@ func TestDefaultClockIgnoresFrozenTimeWithoutTestHooks(t *testing.T) {
 }
 
 func TestDefaultSleeperIgnoresFastSleepWithoutTestHooks(t *testing.T) {
+	disableTestHooksForTest(t)
 	t.Setenv("DISBUG_TEST_FAST_SLEEP", "1")
 
 	if _, ok := DefaultSleeper().(noOpSleeper); ok {
@@ -125,6 +128,7 @@ func TestDefaultSleeperIgnoresFastSleepWithoutTestHooks(t *testing.T) {
 }
 
 func TestDefaultBrowserOpenerIgnoresNoBrowserWithoutTestHooks(t *testing.T) {
+	disableTestHooksForTest(t)
 	t.Setenv("DISBUG_TEST_NO_BROWSER", "1")
 
 	got := reflect.ValueOf(DefaultBrowserOpener()).Pointer()
@@ -202,4 +206,14 @@ func TestDefaultBrowserOpenerNoBrowserWritesURLToStderr(t *testing.T) {
 
 func TestHTTPClientImplementsHTTPDoer(t *testing.T) {
 	var _ HTTPDoer = (*http.Client)(nil)
+}
+
+func disableTestHooksForTest(t *testing.T) {
+	t.Helper()
+
+	t.Setenv("DISBUG_ENABLE_TEST_HOOKS", "")
+	previous := testHooksEnabled.Swap(false)
+	t.Cleanup(func() {
+		testHooksEnabled.Store(previous)
+	})
 }
