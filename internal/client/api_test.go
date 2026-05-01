@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -164,6 +165,12 @@ func TestGetSession(t *testing.T) {
 	if got, want := session.Pins[0].Number, int64(7); got != want {
 		t.Fatalf("Pins[0].Number = %d, want %d", got, want)
 	}
+	if session.Pins[0].URL == nil || *session.Pins[0].URL != "https://example.test/page#pin" {
+		t.Fatalf("Pins[0].URL = %v, want https://example.test/page#pin", session.Pins[0].URL)
+	}
+	if session.Pins[0].Selector == nil || *session.Pins[0].Selector != "#submit" {
+		t.Fatalf("Pins[0].Selector = %v, want #submit", session.Pins[0].Selector)
+	}
 	if got, want := session.Pins[0].ElementInfo["tag"], "button"; got != want {
 		t.Fatalf("ElementInfo[tag] = %v, want %q", got, want)
 	}
@@ -195,6 +202,42 @@ func TestGetSessionDecodesNullableProjectAndReporter(t *testing.T) {
 	}
 	if session.Reporter != nil {
 		t.Fatalf("Reporter = %#v, want nil", session.Reporter)
+	}
+}
+
+func TestPinLitePreservesNullableURLAndSelector(t *testing.T) {
+	var pin PinLite
+	if err := json.Unmarshal([]byte(`{
+		"id":456,
+		"number":7,
+		"feedback":"broken button",
+		"url":null,
+		"selector":null,
+		"element_info":{},
+		"metadata":{}
+	}`), &pin); err != nil {
+		t.Fatalf("Unmarshal() error = %v, want nil", err)
+	}
+	if pin.URL != nil {
+		t.Fatalf("URL = %v, want nil", *pin.URL)
+	}
+	if pin.Selector != nil {
+		t.Fatalf("Selector = %v, want nil", *pin.Selector)
+	}
+
+	marshaled, err := json.Marshal(pin)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v, want nil", err)
+	}
+	var remarshal map[string]any
+	if err := json.Unmarshal(marshaled, &remarshal); err != nil {
+		t.Fatalf("Unmarshal(remarshal) error = %v, want nil", err)
+	}
+	if value, ok := remarshal["url"]; !ok || value != nil {
+		t.Fatalf("remarshaled url = %#v, want explicit null", value)
+	}
+	if value, ok := remarshal["selector"]; !ok || value != nil {
+		t.Fatalf("remarshaled selector = %#v, want explicit null", value)
 	}
 }
 

@@ -87,8 +87,8 @@ type PinLite struct {
 	ID          int64          `json:"id"`
 	Number      int64          `json:"number"`
 	Feedback    string         `json:"feedback"`
-	URL         string         `json:"url"`
-	Selector    string         `json:"selector"`
+	URL         *string        `json:"url"`
+	Selector    *string        `json:"selector"`
 	ElementInfo map[string]any `json:"element_info"`
 	Metadata    map[string]any `json:"metadata"`
 }
