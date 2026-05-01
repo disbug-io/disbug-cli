@@ -99,7 +99,31 @@ func TestSearchSessions_CapsLimitAndAcceptsPinsScope(t *testing.T) {
 				"capabilities":["search"]
 			}`)
 		case "/api/search/":
-			_, _ = io.WriteString(w, `{"results":[],"total":0}`)
+			_, _ = io.WriteString(w, `{
+				"results":[{
+					"pin":{
+						"id":44,
+						"number":3,
+						"feedback":"mobile safari checkout broken",
+						"url":null,
+						"selector":"#checkout",
+						"element_info":{},
+						"metadata":{}
+					},
+					"session":{
+						"id":7393,
+						"project":{"slug":"web","name":"Web"},
+						"url":"https://example.test/mobile-checkout",
+						"status":"open",
+						"pin_count":3,
+						"first_pin_feedback":"mobile safari checkout broken",
+						"reporter":{"email":"user@example.test","display_name":"User"},
+						"updated_at":"2026-05-01T00:00:00Z",
+						"free_tier_locked":false
+					}
+				}],
+				"total":4
+			}`)
 		default:
 			t.Fatalf("unexpected request path: %s", r.URL.Path)
 		}
@@ -119,6 +143,19 @@ func TestSearchSessions_CapsLimitAndAcceptsPinsScope(t *testing.T) {
 	}
 	if res.IsError {
 		t.Fatalf("search_sessions IsError = true, want false: %#v", res.Content)
+	}
+	text := firstTextContent(t, res)
+	if !strings.Contains(text, `"id":7393`) {
+		t.Fatalf("search_sessions content = %q, want parent session id", text)
+	}
+	if !strings.Contains(text, `"status":"open"`) {
+		t.Fatalf("search_sessions content = %q, want parent session status", text)
+	}
+	if !strings.Contains(text, `"first_pin_feedback":"mobile safari checkout broken"`) {
+		t.Fatalf("search_sessions content = %q, want parent session feedback", text)
+	}
+	if !strings.Contains(text, `"total":4`) {
+		t.Fatalf("search_sessions content = %q, want total", text)
 	}
 
 	_ = waitForRequest(t, requests, "/api/me/")

@@ -121,7 +121,7 @@ func TestListSessionsDecodesNullableProjectAndReporter(t *testing.T) {
 	}
 }
 
-func TestSearchSessionsSendsQueryParamsAndDecodesTotal(t *testing.T) {
+func TestSearchSessionsPinsScopeMapsPinHitsToSessions(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got, want := r.URL.Path, "/api/search/"; got != want {
 			t.Fatalf("path = %q, want %q", got, want)
@@ -140,15 +140,26 @@ func TestSearchSessionsSendsQueryParamsAndDecodesTotal(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{
 			"results":[{
-				"id":123,
-				"project":{"slug":"web","name":"Website"},
-				"url":"https://example.test/page",
-				"status":"open",
-				"pin_count":2,
-				"first_pin_feedback":"checkout broken",
-				"reporter":{"email":"r@example.test","display_name":"Reporter"},
-				"updated_at":"2026-05-01T12:00:00Z",
-				"free_tier_locked":false
+				"pin":{
+					"id":456,
+					"number":2,
+					"feedback":"checkout button broken",
+					"url":"https://example.test/page#pin",
+					"selector":"#checkout",
+					"element_info":{"tag":"button"},
+					"metadata":{"severity":"high"}
+				},
+				"session":{
+					"id":123,
+					"project":{"slug":"web","name":"Website"},
+					"url":"https://example.test/page",
+					"status":"open",
+					"pin_count":2,
+					"first_pin_feedback":"checkout broken",
+					"reporter":{"email":"r@example.test","display_name":"Reporter"},
+					"updated_at":"2026-05-01T12:00:00Z",
+					"free_tier_locked":false
+				}
 			}],
 			"total":7
 		}`)
@@ -170,6 +181,15 @@ func TestSearchSessionsSendsQueryParamsAndDecodesTotal(t *testing.T) {
 	}
 	if got, want := len(resp.Results), 1; got != want {
 		t.Fatalf("len(Results) = %d, want %d", got, want)
+	}
+	if got, want := resp.Results[0].ID, int64(123); got != want {
+		t.Fatalf("Session.ID = %d, want %d", got, want)
+	}
+	if got, want := resp.Results[0].Status, "open"; got != want {
+		t.Fatalf("Status = %q, want %q", got, want)
+	}
+	if resp.Results[0].Project == nil || resp.Results[0].Project.Slug != "web" {
+		t.Fatalf("Project = %#v, want web project", resp.Results[0].Project)
 	}
 	if got, want := resp.Results[0].FirstPinFeedback, "checkout broken"; got != want {
 		t.Fatalf("FirstPinFeedback = %q, want %q", got, want)

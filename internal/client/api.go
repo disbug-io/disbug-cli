@@ -55,7 +55,7 @@ type ListSessionsResponse struct {
 // SearchParams configures a /api/search/ call.
 type SearchParams struct {
 	Query string
-	Scope string // "sessions" or "pins"; command passes this but methods set wire scope explicitly
+	Scope string // "sessions" or "pins"; SearchSessions defaults empty scope to "sessions"
 	Limit int
 }
 
@@ -107,13 +107,32 @@ func (c *Client) ListSessions(ctx context.Context, p *ListSessionsParams) (*List
 	return &resp, nil
 }
 
-// SearchSessions calls GET /api/search/ with scope=sessions unless p.Scope is set.
+// SearchSessions calls GET /api/search/ and returns session summaries.
+// When Scope is "pins", the pin search hits are mapped to their parent sessions.
 func (c *Client) SearchSessions(ctx context.Context, p *SearchParams) (*SearchSessionsResponse, error) {
-	var resp SearchSessionsResponse
 	scope := "sessions"
 	if p != nil && p.Scope != "" {
 		scope = p.Scope
 	}
+
+	if scope == "pins" {
+		var resp SearchPinsResponse
+		if err := c.doJSON(ctx, http.MethodGet, searchPath(p, scope), nil, &resp); err != nil {
+			return nil, err
+		}
+
+		results := make([]SessionSummary, 0, len(resp.Results))
+		for _, hit := range resp.Results {
+			results = append(results, hit.Session)
+		}
+
+		return &SearchSessionsResponse{
+			Results: results,
+			Total:   resp.Total,
+		}, nil
+	}
+
+	var resp SearchSessionsResponse
 	if err := c.doJSON(ctx, http.MethodGet, searchPath(p, scope), nil, &resp); err != nil {
 		return nil, err
 	}
