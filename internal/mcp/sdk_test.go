@@ -3,15 +3,21 @@ package mcp
 import (
 	"context"
 	"testing"
+	"time"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+const sdkTestTimeout = 3 * time.Second
+
 func callTool(t *testing.T, srv *sdkmcp.Server, name string, arguments any) (*sdkmcp.CallToolResult, error) {
 	t.Helper()
 
+	ctx, cancel := context.WithTimeout(t.Context(), sdkTestTimeout)
+	t.Cleanup(cancel)
+
 	clientTransport, serverTransport := sdkmcp.NewInMemoryTransports()
-	serverSession, err := srv.Connect(context.Background(), serverTransport, nil)
+	serverSession, err := srv.Connect(ctx, serverTransport, nil)
 	if err != nil {
 		t.Fatalf("server Connect() error = %v", err)
 	}
@@ -20,7 +26,7 @@ func callTool(t *testing.T, srv *sdkmcp.Server, name string, arguments any) (*sd
 	})
 
 	client := sdkmcp.NewClient(&sdkmcp.Implementation{Name: "disbug-test", Version: "test"}, nil)
-	clientSession, err := client.Connect(context.Background(), clientTransport, nil)
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
 	if err != nil {
 		t.Fatalf("client Connect() error = %v", err)
 	}
@@ -28,7 +34,7 @@ func callTool(t *testing.T, srv *sdkmcp.Server, name string, arguments any) (*sd
 		_ = clientSession.Close()
 	})
 
-	return clientSession.CallTool(context.Background(), &sdkmcp.CallToolParams{
+	return clientSession.CallTool(ctx, &sdkmcp.CallToolParams{
 		Name:      name,
 		Arguments: arguments,
 	})

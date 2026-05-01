@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -45,7 +46,16 @@ func TestWhoami_InProcess(t *testing.T) {
 		t.Fatalf("whoami content = %q, want compact JSON field", text)
 	}
 
-	req := <-requests
+	ctx, cancel := context.WithTimeout(t.Context(), sdkTestTimeout)
+	defer cancel()
+
+	var req *http.Request
+	select {
+	case req = <-requests:
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for /api/me/ request: %v", ctx.Err())
+	}
+
 	if got, want := req.Method, http.MethodGet; got != want {
 		t.Fatalf("request method = %q, want %q", got, want)
 	}
@@ -81,6 +91,9 @@ func TestWhoami_InProcessAuthErrorReturnsToolError(t *testing.T) {
 	}
 	if strings.Contains(text, "dba_secret") {
 		t.Fatalf("whoami error content = %q, want sanitized auth message", text)
+	}
+	if res.StructuredContent != nil {
+		t.Fatalf("whoami StructuredContent = %#v, want nil on tool error", res.StructuredContent)
 	}
 }
 
