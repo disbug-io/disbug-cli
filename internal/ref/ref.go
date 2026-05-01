@@ -171,7 +171,7 @@ func DedupAndUnion(fetches []PinFetch) []PinFetch {
 		index, ok := indexByPin[fetch.Pin]
 		if !ok {
 			indexByPin[fetch.Pin] = len(merged)
-			merged = append(merged, PinFetch{Pin: fetch.Pin, Fields: append([]string(nil), fetch.Fields...)})
+			merged = append(merged, PinFetch{Pin: fetch.Pin, Fields: unionFields(fetch.Fields)})
 			continue
 		}
 
@@ -181,13 +181,15 @@ func DedupAndUnion(fetches []PinFetch) []PinFetch {
 	return merged
 }
 
-func unionFields(left []string, right []string) []string {
-	seen := make(map[string]bool, len(left)+len(right))
-	for _, field := range append(left, right...) {
-		if field == "all" {
-			return []string{"all"}
+func unionFields(fieldLists ...[]string) []string {
+	seen := make(map[string]bool)
+	for _, fieldList := range fieldLists {
+		for _, field := range fieldList {
+			if field == "all" {
+				return []string{"all"}
+			}
+			seen[field] = true
 		}
-		seen[field] = true
 	}
 
 	fields := make([]string, 0, len(seen))

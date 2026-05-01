@@ -53,7 +53,7 @@ func TestParsePin(t *testing.T) {
 		})
 	}
 
-	for _, arg := range []string{"", "7392", "7392.", ".2", "0.1", "1.0", "7392.2.3", "7392.x", "a.b"} {
+	for _, arg := range []string{"", "7392", "7392.", ".2", "0.1", "1.0", "-1.1", "1.-1", "7392.2.3", "7392.x", "a.b"} {
 		t.Run("rejects "+arg, func(t *testing.T) {
 			_, err := ParsePin(arg)
 
@@ -157,5 +157,36 @@ func TestDedupAndUnion(t *testing.T) {
 	require.Equal(t, []PinFetch{
 		{Pin: PinRef{Session: 7392, Pin: 2}, Fields: []string{"screenshot", "console", "network"}},
 		{Pin: PinRef{Session: 7392, Pin: 3}, Fields: []string{"all"}},
+	}, got)
+}
+
+func TestDedupAndUnionCanonicalizesFirstOccurrence(t *testing.T) {
+	got := DedupAndUnion([]PinFetch{
+		{Pin: PinRef{Session: 1, Pin: 1}, Fields: []string{"network", "console"}},
+	})
+
+	require.Equal(t, []PinFetch{
+		{Pin: PinRef{Session: 1, Pin: 1}, Fields: []string{"console", "network"}},
+	}, got)
+}
+
+func TestDedupAndUnionAllSupersedesSpecificFields(t *testing.T) {
+	got := DedupAndUnion([]PinFetch{
+		{Pin: PinRef{Session: 1, Pin: 1}, Fields: []string{"console"}},
+		{Pin: PinRef{Session: 1, Pin: 1}, Fields: []string{"all"}},
+	})
+
+	require.Equal(t, []PinFetch{
+		{Pin: PinRef{Session: 1, Pin: 1}, Fields: []string{"all"}},
+	}, got)
+}
+
+func TestDedupAndUnionAllSupersedesSpecificFieldsInSameFetch(t *testing.T) {
+	got := DedupAndUnion([]PinFetch{
+		{Pin: PinRef{Session: 1, Pin: 1}, Fields: []string{"all", "console"}},
+	})
+
+	require.Equal(t, []PinFetch{
+		{Pin: PinRef{Session: 1, Pin: 1}, Fields: []string{"all"}},
 	}, got)
 }
