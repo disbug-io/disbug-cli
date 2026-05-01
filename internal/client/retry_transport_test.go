@@ -113,6 +113,38 @@ func (b *trackedBody) Close() error {
 	return nil
 }
 
+type blockingBody struct {
+	closed chan struct{}
+	once   sync.Once
+}
+
+func newBlockingBody() *blockingBody {
+	return &blockingBody{closed: make(chan struct{})}
+}
+
+func (b *blockingBody) Read([]byte) (int, error) {
+	<-b.closed
+
+	return 0, io.EOF
+}
+
+func (b *blockingBody) Close() error {
+	b.once.Do(func() {
+		close(b.closed)
+	})
+
+	return nil
+}
+
+func (b *blockingBody) isClosed() bool {
+	select {
+	case <-b.closed:
+		return true
+	default:
+		return false
+	}
+}
+
 func TestRetryTransport_DoesNotRetryHTTPStatusWhenContextCancelled(t *testing.T) {
 	sleeper := &recordingSleeper{}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -149,6 +181,91 @@ func TestRetryTransport_DoesNotRetryHTTPStatusWhenContextCancelled(t *testing.T)
 	}
 	if !firstBodyClosed {
 		t.Fatal("first response body closed = false, want true")
+	}
+}
+
+func TestRetryTransport_CancelDuringRetryAfterWaitReturnsPromptly(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	base := &sequenceTransport{
+		actions: []func(*http.Request) (*http.Response, error){
+			func(*http.Request) (*http.Response, error) {
+				resp := response(http.StatusTooManyRequests, nil)
+				resp.Header.Set("Retry-After", "1")
+				go func() {
+					time.Sleep(20 * time.Millisecond)
+					cancel()
+				}()
+
+				return resp, nil
+			},
+			func(*http.Request) (*http.Response, error) { return response(http.StatusNoContent, nil), nil },
+		},
+	}
+	transport := newRetryTransport(base, nil)
+
+	start := time.Now()
+	resp, err := transport.RoundTrip(newRequest(t, ctx))
+	elapsed := time.Since(start)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("RoundTrip error = %v, want context canceled", err)
+	}
+	if elapsed > 200*time.Millisecond {
+		t.Fatalf("RoundTrip elapsed = %s, want under 200ms", elapsed)
+	}
+	if got, want := base.hitCount(), 1; got != want {
+		t.Fatalf("hits = %d, want %d", got, want)
+	}
+}
+
+func TestRetryTransport_ClosesBlockingRetryableBodyWithoutHanging(t *testing.T) {
+	sleeper := &recordingSleeper{}
+	retryBody := newBlockingBody()
+	base := &sequenceTransport{
+		actions: []func(*http.Request) (*http.Response, error){
+			func(*http.Request) (*http.Response, error) {
+				return response(http.StatusServiceUnavailable, retryBody), nil
+			},
+			func(*http.Request) (*http.Response, error) { return response(http.StatusNoContent, nil), nil },
+		},
+	}
+	transport := newRetryTransport(base, sleeper)
+
+	done := make(chan struct{})
+	var status int
+	var err error
+	go func() {
+		defer close(done)
+		resp, roundTripErr := transport.RoundTrip(newRequest(t, context.Background()))
+		err = roundTripErr
+		if resp != nil {
+			status = resp.StatusCode
+			_ = resp.Body.Close()
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+		_ = retryBody.Close()
+		<-done
+		t.Fatal("RoundTrip hung draining retryable response body")
+	}
+	if err != nil {
+		t.Fatalf("RoundTrip error = %v, want nil", err)
+	}
+
+	if got, want := status, http.StatusNoContent; got != want {
+		t.Fatalf("status = %d, want %d", got, want)
+	}
+	if !retryBody.isClosed() {
+		t.Fatal("retryable response body closed = false, want true")
+	}
+	if got, want := base.hitCount(), 2; got != want {
+		t.Fatalf("hits = %d, want %d", got, want)
 	}
 }
 

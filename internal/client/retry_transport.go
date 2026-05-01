@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"io"
@@ -20,23 +21,26 @@ var retryBackoffSchedule = []time.Duration{
 }
 
 type retryTransport struct {
-	base       http.RoundTripper
-	sleeper    seams.Sleeper
-	maxRetries int
+	base            http.RoundTripper
+	sleeper         seams.Sleeper
+	maxRetries      int
+	useTimerSleeper bool
 }
 
 func newRetryTransport(base http.RoundTripper, sleeper seams.Sleeper) *retryTransport {
 	if base == nil {
 		base = http.DefaultTransport
 	}
+	useTimerSleeper := sleeper == nil
 	if sleeper == nil {
 		sleeper = seams.DefaultSleeper()
 	}
 
 	return &retryTransport{
-		base:       base,
-		sleeper:    sleeper,
-		maxRetries: 3,
+		base:            base,
+		sleeper:         sleeper,
+		maxRetries:      3,
+		useTimerSleeper: useTimerSleeper,
 	}
 }
 
@@ -50,8 +54,10 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		base = http.DefaultTransport
 	}
 	sleeper := t.sleeper
+	useTimerSleeper := t.useTimerSleeper
 	if sleeper == nil {
 		sleeper = seams.DefaultSleeper()
+		useTimerSleeper = true
 	}
 
 	if !canRetryRequestBody(req) {
@@ -83,8 +89,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 				return resp, err
 			}
 
-			sleeper.Sleep(backoffForAttempt(attempt))
-			if err := req.Context().Err(); err != nil {
+			if err := waitForRetry(req.Context(), sleeper, useTimerSleeper, backoffForAttempt(attempt)); err != nil {
 				return nil, err
 			}
 			continue
@@ -99,8 +104,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return nil, err
 		}
 		drainAndClose(resp.Body)
-		sleeper.Sleep(retryDelay(resp, attempt))
-		if err := req.Context().Err(); err != nil {
+		if err := waitForRetry(req.Context(), sleeper, useTimerSleeper, retryDelay(resp, attempt)); err != nil {
 			return nil, err
 		}
 	}
@@ -189,6 +193,43 @@ func backoffForAttempt(attempt int) time.Duration {
 	return base + jitter(base)
 }
 
+func waitForRetry(ctx context.Context, sleeper seams.Sleeper, useTimerSleeper bool, d time.Duration) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if d <= 0 {
+		if !useTimerSleeper {
+			sleeper.Sleep(d)
+		}
+
+		return ctx.Err()
+	}
+	if useTimerSleeper {
+		timer := time.NewTimer(d)
+		defer timer.Stop()
+
+		select {
+		case <-timer.C:
+			return ctx.Err()
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		sleeper.Sleep(d)
+	}()
+
+	select {
+	case <-done:
+		return ctx.Err()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 func jitter(base time.Duration) time.Duration {
 	max := base / 5
 	if max <= 0 {
@@ -208,6 +249,5 @@ func drainAndClose(body io.ReadCloser) {
 		return
 	}
 
-	_, _ = io.Copy(io.Discard, body)
 	_ = body.Close()
 }
