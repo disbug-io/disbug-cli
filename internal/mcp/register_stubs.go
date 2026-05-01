@@ -2,8 +2,6 @@ package mcp
 
 import mcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
-func registerWhoami(_ *mcp.Server, _ *Deps) {}
-
 func registerListSessions(_ *mcp.Server, _ *Deps) {}
 
 func registerGetSession(_ *mcp.Server, _ *Deps) {}
