@@ -16,13 +16,8 @@ func Format(err error) string {
 		return userFacing.Message
 	}
 
-	var usage UsageError
-	if errors.As(err, &usage) {
+	if usage, ok := asUsageError(err); ok {
 		return usage.Message
-	}
-	var usagePtr *UsageError
-	if errors.As(err, &usagePtr) && usagePtr != nil {
-		return usagePtr.Message
 	}
 
 	var noToken NoToken
@@ -55,12 +50,7 @@ func ExitCode(err error) int {
 		return 0
 	}
 
-	var usage UsageError
-	if errors.As(err, &usage) {
-		return 2
-	}
-	var usagePtr *UsageError
-	if errors.As(err, &usagePtr) && usagePtr != nil {
+	if _, ok := asUsageError(err); ok {
 		return 2
 	}
 
@@ -90,6 +80,20 @@ func ExitCode(err error) int {
 	}
 
 	return 1
+}
+
+func asUsageError(err error) (UsageError, bool) {
+	var usage UsageError
+	if errors.As(err, &usage) {
+		return usage, true
+	}
+
+	var usagePtr *UsageError
+	if errors.As(err, &usagePtr) && usagePtr != nil {
+		return *usagePtr, true
+	}
+
+	return UsageError{}, false
 }
 
 func asAPIError(err error) (APIError, bool) {
