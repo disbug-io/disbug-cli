@@ -39,11 +39,11 @@ func TestLoginBrowserFlowPersistsTokenProfileMetadata(t *testing.T) {
 	defer backend.Close()
 
 	opened := make(chan string, 1)
-	restore := auth.SwapBrowserOpener(func(rawURL string) error {
+	previous := auth.SwapBrowserOpener(func(rawURL string) error {
 		opened <- rawURL
 		return nil
 	})
-	defer restore()
+	defer auth.SwapBrowserOpener(previous)
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -100,11 +100,11 @@ func TestLoginRespectsListenAddr(t *testing.T) {
 	listenAddr := freeListenAddr(t)
 
 	opened := make(chan string, 1)
-	restore := auth.SwapBrowserOpener(func(rawURL string) error {
+	previous := auth.SwapBrowserOpener(func(rawURL string) error {
 		opened <- rawURL
 		return nil
 	})
-	defer restore()
+	defer auth.SwapBrowserOpener(previous)
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -247,11 +247,11 @@ func TestLoginBrowserFlowUsesFastSleeperHook(t *testing.T) {
 	defer backend.Close()
 
 	opened := make(chan string, 1)
-	restore := auth.SwapBrowserOpener(func(rawURL string) error {
+	previous := auth.SwapBrowserOpener(func(rawURL string) error {
 		opened <- rawURL
 		return nil
 	})
-	defer restore()
+	defer auth.SwapBrowserOpener(previous)
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

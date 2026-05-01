@@ -144,6 +144,9 @@ func TestListenerFixedAddress(t *testing.T) {
 	}
 
 	resp := getCallback(t, listener, validToken, "STATE123")
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	_ = readBody(t, resp)
 	result, err := listener.Wait(context.Background(), time.Second)
 	if err != nil {

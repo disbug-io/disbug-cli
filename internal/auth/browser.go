@@ -32,16 +32,12 @@ func Open(rawURL string) error {
 	return current(rawURL)
 }
 
-// SwapBrowserOpener replaces the process-wide browser opener until the returned restore function is called.
-func SwapBrowserOpener(next BrowserOpener) func() {
+// SwapBrowserOpener replaces the process-wide browser opener and returns the previous opener.
+func SwapBrowserOpener(next BrowserOpener) BrowserOpener {
 	openerMu.Lock()
 	previous := opener
 	opener = next
 	openerMu.Unlock()
 
-	return func() {
-		openerMu.Lock()
-		opener = previous
-		openerMu.Unlock()
-	}
+	return previous
 }

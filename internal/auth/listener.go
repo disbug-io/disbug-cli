@@ -17,12 +17,14 @@ import (
 
 var callbackTokenPattern = regexp.MustCompile(`^dba_[A-Za-z0-9]{24}$`)
 
+// CallbackResult is the token callback result returned by Listener.Wait.
 type CallbackResult struct {
 	Token string
 	State string
 	Err   error
 }
 
+// Listener serves the local auth callback endpoint for browser login.
 type Listener struct {
 	state     string
 	success   []byte
@@ -35,6 +37,7 @@ type Listener struct {
 	sleeper   seams.Sleeper
 }
 
+// NewListener starts a local auth callback listener.
 func NewListener(
 	state string,
 	success,
@@ -84,6 +87,7 @@ func NewListener(
 	return l, nil
 }
 
+// Port returns the TCP port the listener is bound to.
 func (l *Listener) Port() int {
 	if l == nil || l.listener == nil {
 		return 0
@@ -97,6 +101,7 @@ func (l *Listener) Port() int {
 	return addr.Port
 }
 
+// Wait waits for an auth callback result, close, context cancellation, or timeout.
 func (l *Listener) Wait(ctx context.Context, timeout time.Duration) (CallbackResult, error) {
 	if l == nil {
 		return CallbackResult{}, errors.New("listener is nil")
@@ -126,6 +131,7 @@ func (l *Listener) Wait(ctx context.Context, timeout time.Duration) (CallbackRes
 	}
 }
 
+// Close shuts down the local auth callback listener.
 func (l *Listener) Close() error {
 	if l == nil || l.server == nil {
 		return nil
@@ -142,12 +148,15 @@ func (l *Listener) Close() error {
 	return err
 }
 
+// BindFreePort returns an available localhost TCP port.
 func BindFreePort() (int, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return 0, fmt.Errorf("bind free port: %w", err)
 	}
-	defer listener.Close()
+	defer func() {
+		_ = listener.Close()
+	}()
 
 	addr, ok := listener.Addr().(*net.TCPAddr)
 	if !ok {
@@ -157,6 +166,7 @@ func BindFreePort() (int, error) {
 	return addr.Port, nil
 }
 
+// BuildAuthURL returns the Disbug agent auth URL for the local callback.
 func BuildAuthURL(apiBase, callback, state, name string) string {
 	base := strings.TrimRight(apiBase, "/")
 	values := url.Values{}
@@ -169,6 +179,7 @@ func BuildAuthURL(apiBase, callback, state, name string) string {
 	return base + "/agent-auth/?" + values.Encode()
 }
 
+// ParsePastebackURL extracts token and state from a manually pasted redirect URL.
 func ParsePastebackURL(raw string) (token, state string, err error) {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
