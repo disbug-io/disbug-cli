@@ -63,9 +63,8 @@ func New(apiURL, token, userAgent string, sleeper seams.Sleeper, doer seams.HTTP
 		clock = seams.DefaultClock()
 	}
 
-	base := baseRoundTripper(doer)
 	transport := newRetryTransport(&authTransport{
-		base:      base,
+		base:      doerRoundTripper{doer: doer},
 		token:     token,
 		userAgent: userAgent,
 	}, sleeper)
@@ -80,18 +79,6 @@ func New(apiURL, token, userAgent string, sleeper seams.Sleeper, doer seams.HTTP
 		sem:       make(chan struct{}, maxConcurrentDoJSON),
 		clock:     clock,
 	}
-}
-
-func baseRoundTripper(doer seams.HTTPDoer) http.RoundTripper {
-	if httpClient, ok := doer.(*http.Client); ok {
-		if httpClient.Transport != nil {
-			return httpClient.Transport
-		}
-
-		return http.DefaultTransport
-	}
-
-	return doerRoundTripper{doer: doer}
 }
 
 type doerRoundTripper struct {
@@ -226,7 +213,12 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body io.Reader
 		return nil
 	}
 
-	return json.NewDecoder(resp.Body).Decode(out)
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return err
+	}
+	discardBody(resp.Body)
+
+	return nil
 }
 
 func (c *Client) acquire(ctx context.Context) error {

@@ -22,6 +22,31 @@ func (f doerFunc) Do(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
+type chunkedReadCloser struct {
+	chunks []string
+	reads  int
+	eof    bool
+	closed bool
+}
+
+func (b *chunkedReadCloser) Read(p []byte) (int, error) {
+	b.reads++
+	if len(b.chunks) == 0 {
+		b.eof = true
+		return 0, io.EOF
+	}
+
+	chunk := b.chunks[0]
+	b.chunks = b.chunks[1:]
+
+	return copy(p, chunk), nil
+}
+
+func (b *chunkedReadCloser) Close() error {
+	b.closed = true
+	return nil
+}
+
 func TestClient_DecodeAPIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -74,6 +99,38 @@ func TestClient_NetworkError(t *testing.T) {
 	}
 }
 
+func TestClient_PreservesProvidedHTTPClientDoSemantics(t *testing.T) {
+	redirectErr := errors.New("provided check redirect was used")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/api/me/final/", http.StatusFound)
+	}))
+	t.Cleanup(server.Close)
+	provided := server.Client()
+	provided.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return redirectErr
+	}
+	c := New(server.URL, "dba_test", "disbug-cli-test", &recordingSleeper{}, provided, nil)
+
+	_, err := c.Me(context.Background())
+	if err == nil {
+		t.Fatal("Me() error = nil, want provided CheckRedirect error")
+	}
+	if !strings.Contains(err.Error(), redirectErr.Error()) {
+		t.Fatalf("Me() error = %v, want provided CheckRedirect error", err)
+	}
+}
+
+func TestClient_SetsDefaultTopLevelTimeout(t *testing.T) {
+	c := New("https://api.example.test", "dba_test", "disbug-cli-test", nil, doerFunc(func(*http.Request) (*http.Response, error) {
+		t.Fatal("doer should not be called")
+		return nil, nil
+	}), nil)
+
+	if got, want := c.client.Timeout, 30*time.Second; got != want {
+		t.Fatalf("client timeout = %s, want %s", got, want)
+	}
+}
+
 func TestClient_MeSendsHeadersAndDecodesResponse(t *testing.T) {
 	requests := make(chan *http.Request, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -120,6 +177,125 @@ func TestClient_MeSendsHeadersAndDecodesResponse(t *testing.T) {
 	}
 	if got, want := req.Header.Get("User-Agent"), "disbug-cli-test"; got != want {
 		t.Fatalf("User-Agent = %q, want %q", got, want)
+	}
+}
+
+func TestClient_DoJSONSetsContentTypeWithBody(t *testing.T) {
+	var gotContentType string
+	c := New("https://api.example.test", "dba_test", "disbug-cli-test", nil, doerFunc(func(req *http.Request) (*http.Response, error) {
+		gotContentType = req.Header.Get("Content-Type")
+		return &http.Response{
+			StatusCode: http.StatusNoContent,
+			Body:       io.NopCloser(strings.NewReader("")),
+			Request:    req,
+		}, nil
+	}), nil)
+
+	err := c.doJSON(context.Background(), http.MethodPost, "/api/me/", strings.NewReader(`{"ok":true}`), nil)
+	if err != nil {
+		t.Fatalf("doJSON() error = %v, want nil", err)
+	}
+	if got, want := gotContentType, "application/json"; got != want {
+		t.Fatalf("Content-Type = %q, want %q", got, want)
+	}
+}
+
+func TestClient_DoJSONDrainsAndClosesBodyAfterSuccessfulDecode(t *testing.T) {
+	body := &chunkedReadCloser{chunks: []string{
+		`{"agent_name":"agent"}`,
+		` trailing bytes`,
+	}}
+	c := New("https://api.example.test", "dba_test", "disbug-cli-test", nil, doerFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       body,
+			Request:    req,
+		}, nil
+	}), nil)
+
+	var me Me
+	err := c.doJSON(context.Background(), http.MethodGet, "/api/me/", nil, &me)
+	if err != nil {
+		t.Fatalf("doJSON() error = %v, want nil", err)
+	}
+	if got, want := me.AgentName, "agent"; got != want {
+		t.Fatalf("AgentName = %q, want %q", got, want)
+	}
+	if !body.eof {
+		t.Fatal("body was not drained to EOF")
+	}
+	if !body.closed {
+		t.Fatal("body was not closed")
+	}
+}
+
+func TestClient_DoJSONPreservesSuccessfulDecodeError(t *testing.T) {
+	body := &chunkedReadCloser{chunks: []string{`{"agent_name":`}}
+	c := New("https://api.example.test", "dba_test", "disbug-cli-test", nil, doerFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       body,
+			Request:    req,
+		}, nil
+	}), nil)
+
+	var me Me
+	err := c.doJSON(context.Background(), http.MethodGet, "/api/me/", nil, &me)
+	if err == nil {
+		t.Fatal("doJSON() error = nil, want decode error")
+	}
+	if !body.closed {
+		t.Fatal("body was not closed after decode error")
+	}
+}
+
+func TestClient_DoJSONReturnsContextErrorWhileWaitingForSemaphore(t *testing.T) {
+	c := New("https://api.example.test", "dba_test", "disbug-cli-test", nil, doerFunc(func(*http.Request) (*http.Response, error) {
+		t.Fatal("doer should not be called while semaphore is full")
+		return nil, nil
+	}), nil)
+	for range maxConcurrentDoJSON {
+		c.sem <- struct{}{}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := c.doJSON(ctx, http.MethodGet, "/api/me/", nil, nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("doJSON() error = %v, want context.Canceled", err)
+	}
+	if got, want := len(c.sem), maxConcurrentDoJSON; got != want {
+		t.Fatalf("semaphore length = %d, want %d", got, want)
+	}
+}
+
+func TestClient_DoJSONPreservesContextTransportErrors(t *testing.T) {
+	for _, errFromDoer := range []error{context.Canceled, context.DeadlineExceeded} {
+		t.Run(errFromDoer.Error(), func(t *testing.T) {
+			c := New("https://api.example.test", "dba_test", "disbug-cli-test", nil, doerFunc(func(*http.Request) (*http.Response, error) {
+				return nil, errFromDoer
+			}), nil)
+
+			err := c.doJSON(context.Background(), http.MethodGet, "/api/me/", nil, nil)
+			if !errors.Is(err, errFromDoer) {
+				t.Fatalf("doJSON() error = %v, want %v", err, errFromDoer)
+			}
+			var networkErr *errfmt.NetworkError
+			if errors.As(err, &networkErr) {
+				t.Fatalf("doJSON() error = %T, want context error unchanged", err)
+			}
+		})
+	}
+}
+
+func TestClient_UsesConcurrencySemaphoreCapacity(t *testing.T) {
+	c := New("https://api.example.test", "dba_test", "disbug-cli-test", nil, doerFunc(func(*http.Request) (*http.Response, error) {
+		t.Fatal("doer should not be called")
+		return nil, nil
+	}), nil)
+
+	if got, want := cap(c.sem), maxConcurrentDoJSON; got != want {
+		t.Fatalf("semaphore cap = %d, want %d", got, want)
 	}
 }
 
