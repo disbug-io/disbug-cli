@@ -68,7 +68,7 @@ func ExitCode(err error) int {
 
 	if api, ok := asAPIError(err); ok {
 		switch {
-		case api.StatusCode == 401:
+		case isAuthError(api):
 			return 4
 		case api.StatusCode == 404:
 			return 6

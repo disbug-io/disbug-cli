@@ -103,6 +103,8 @@ func TestExitCode(t *testing.T) {
 		{name: "usage", err: UsageError{Message: "bad usage"}, want: 2},
 		{name: "no token", err: NoToken{}, want: 4},
 		{name: "api 401", err: APIError{StatusCode: 401}, want: 4},
+		{name: "auth code with 403", err: APIError{StatusCode: 403, Code: "token_revoked"}, want: 4},
+		{name: "auth code with 500", err: APIError{StatusCode: 500, Code: "owner_team_lost"}, want: 4},
 		{name: "network", err: NetworkError{URL: "https://api.disbug.io", Cause: errors.New("timeout")}, want: 5},
 		{name: "api 404", err: APIError{StatusCode: 404}, want: 6},
 		{name: "api 403", err: APIError{StatusCode: 403}, want: 7},
@@ -110,6 +112,7 @@ func TestExitCode(t *testing.T) {
 		{name: "api 500", err: APIError{StatusCode: 500}, want: 9},
 		{name: "fallback", err: errors.New("boom"), want: 1},
 		{name: "wrapped no token", err: fmt.Errorf("wrap: %w", NoToken{}), want: 4},
+		{name: "wrapped auth code", err: fmt.Errorf("wrap: %w", APIError{StatusCode: 403, Code: "auth_required"}), want: 4},
 		{name: "wrapped api", err: fmt.Errorf("wrap: %w", APIError{StatusCode: 429}), want: 8},
 		{name: "wrapped api pointer", err: fmt.Errorf("wrap: %w", &APIError{StatusCode: 500}), want: 9},
 	}
