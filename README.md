@@ -33,35 +33,18 @@ disbug session 7392
 disbug pin 7392.2 --fields console,network
 ```
 
-### Use as an MCP server (Claude Desktop)
+### Use as an MCP server
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+Disbug exposes 7 read-only MCP tools: `whoami`, `list_sessions`, `get_session`, `get_pin`, `get_pins`, `search_sessions`, `search_pins`.
 
-```json
-{
-  "mcpServers": {
-    "disbug": { "command": "disbug", "args": ["mcp"] }
-  }
-}
-```
+Agent setup recipes:
 
-Then restart Claude Desktop. The agent now has 7 read-only tools: `whoami`, `list_sessions`, `get_session`, `get_pin`, `get_pins`, `search_sessions`, `search_pins`.
-
-### Use as an MCP server (Claude Code)
-
-```bash
-claude mcp add --transport stdio disbug -- disbug mcp
-```
-
-### Use as an MCP server (Codex CLI / Desktop)
-
-Edit `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.disbug]
-command = "disbug"
-args = ["mcp"]
-```
+- [Claude Desktop](docs/integrations/claude-desktop.md)
+- [Claude Code](docs/integrations/claude-code.md)
+- [Codex](docs/integrations/codex.md)
+- [Cursor](docs/integrations/cursor.md)
+- [Hermes](docs/integrations/hermes.md)
+- [OpenClaw](docs/integrations/openclaw.md)
 
 ### Multi-profile
 
