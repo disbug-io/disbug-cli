@@ -26,7 +26,7 @@ Grab a binary for your OS/arch from [Releases](https://github.com/disbug-io/disb
 ## Quickstart
 
 ```bash
-disbug login                 # opens a browser; saves token to ~/.config/disbug/default.json
+disbug login                 # opens a browser; saves token to <UserConfigDir>/disbug/default.json
 disbug whoami                # confirms identity + capabilities
 disbug sessions --status open
 disbug session 7392
