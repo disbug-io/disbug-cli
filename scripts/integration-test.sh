@@ -16,6 +16,7 @@ fi
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 export XDG_CONFIG_HOME="$TMP"
+unset DISBUG_TOKEN
 
 fail() {
   echo "FAIL: $1" >&2
@@ -63,7 +64,37 @@ PY
   fail "extract first session ID"
 }
 
-run_step "session $SESSION_ID" "$BIN" session "$SESSION_ID" --pretty
-run_step "pin $SESSION_ID.1" "$BIN" pin "$SESSION_ID.1" --fields screenshot --pretty
+SESSION_JSON="$TMP/session.json"
+if ! "$BIN" session "$SESSION_ID" --pretty | tee "$SESSION_JSON"; then
+  fail "session $SESSION_ID"
+fi
+
+PIN_NUMBER=$(
+  python3 - "$SESSION_JSON" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    payload = json.load(handle)
+
+pins = payload.get("pins") or []
+if not pins:
+    sys.exit(2)
+
+pin_number = pins[0].get("number")
+if pin_number in (None, ""):
+    sys.exit(3)
+
+print(pin_number)
+PY
+) || {
+  status=$?
+  if [[ "$status" -eq 2 ]]; then
+    fail "session $SESSION_ID returned no pins"
+  fi
+  fail "extract first pin number"
+}
+
+run_step "pin $SESSION_ID.$PIN_NUMBER" "$BIN" pin "$SESSION_ID.$PIN_NUMBER" --fields screenshot --pretty
 
 echo "PASS"
