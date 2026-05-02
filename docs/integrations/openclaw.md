@@ -4,38 +4,83 @@ Configure OpenClaw to run Disbug as an MCP server over stdio.
 
 ## Configure
 
-Run:
+Edit:
 
-```bash
-openclaw mcp set disbug '{"command":"disbug","args":["mcp"]}'
+```text
+~/.openclaw/openclaw.json
 ```
 
-OpenClaw stores this under `mcp.servers`. Setting the server updates the registry; it does not validate that `disbug` is reachable.
+Enable and configure the MCP adapter under `plugins.entries["mcp-adapter"]`:
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "mcp-adapter": {
+        "enabled": true,
+        "config": {
+          "servers": [
+            {
+              "name": "disbug",
+              "transport": "stdio",
+              "command": "disbug",
+              "args": ["mcp"]
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+```
 
 For a non-default profile, put the global flag before the command:
 
-```bash
-openclaw mcp set disbug '{"command":"disbug","args":["--profile","work","mcp"]}'
+```json
+{
+  "plugins": {
+    "entries": {
+      "mcp-adapter": {
+        "enabled": true,
+        "config": {
+          "servers": [
+            {
+              "name": "disbug",
+              "transport": "stdio",
+              "command": "disbug",
+              "args": ["--profile", "work", "mcp"]
+            }
+          ]
+        }
+      }
+    }
+  }
+}
 ```
+
+Stdio servers can also include an `env` object if your OpenClaw environment needs explicit variables.
 
 ## Restart
 
-Start a new OpenClaw session, or reload MCP configuration if your OpenClaw session exposes a reload action.
+Restart the OpenClaw gateway after editing the config:
+
+```bash
+openclaw gateway restart
+```
 
 ## Verify
 
-Run:
+Confirm the adapter plugin is loaded:
 
 ```bash
-openclaw mcp list
-openclaw mcp show disbug --json
+openclaw plugins list
 ```
 
-Then ask OpenClaw to use the Disbug `whoami` tool from the MCP server.
+The default tool prefix is enabled, so Disbug tools are exposed as `disbug_whoami`, `disbug_list_sessions`, and similar names. For tool discovery, inspect the gateway logs or ask OpenClaw to use `disbug_whoami`.
 
 ## Troubleshooting
 
-- PATH: run `which disbug`. If OpenClaw cannot find it, use the full path in the registry command, commonly `/opt/homebrew/bin/disbug` or `/usr/local/bin/disbug`.
-- Reload: setting the registry does not prove reachability; start a new OpenClaw session or reload MCP configuration before testing.
-- Token: run `disbug login`, then start a new OpenClaw session.
+- PATH: run `which disbug`. If OpenClaw cannot find it, use the full path in `command`, commonly `/opt/homebrew/bin/disbug` or `/usr/local/bin/disbug`.
+- Reload: run `openclaw gateway restart` after editing `~/.openclaw/openclaw.json`.
+- Token: run `disbug login`, then restart the OpenClaw gateway.
 - Profile: if you logged in with `disbug --profile work login`, use `args: ["--profile", "work", "mcp"]`.
