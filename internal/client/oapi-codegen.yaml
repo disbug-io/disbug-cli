@@ -1,8 +1,9 @@
-package: client
+package: openapi
 generate:
   models: true
   std-http-server: false
   client: true
-output: internal/client/generated.go
+output: internal/client/openapi/generated.go
 output-options:
   skip-prune: true
+  response-type-suffix: Resp

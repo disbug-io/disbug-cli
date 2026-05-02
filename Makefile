@@ -20,6 +20,8 @@ TOOLS_DIR := $(CURDIR)/.tools
 GOFUMPT := $(TOOLS_DIR)/gofumpt
 GOIMPORTS := $(TOOLS_DIR)/goimports
 GOLANGCI_LINT := $(TOOLS_DIR)/golangci-lint
+OAPI_CODEGEN := $(TOOLS_DIR)/oapi-codegen
+OAPI_CODEGEN_VERSION := v2.4.0
 TOOLS_STAMP := $(TOOLS_DIR)/.versions
 TOOLS_VERSION := gofumpt=v0.9.2;goimports=v0.44.0;golangci-lint=v2.11.4
 
@@ -52,7 +54,9 @@ tools:
 	fi
 
 codegen: tools
-	@.tools/oapi-codegen --version >/dev/null 2>&1 || GOBIN=$(TOOLS_DIR) go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.4.0
+	@if ! [ -x "$(OAPI_CODEGEN)" ] || ! "$(OAPI_CODEGEN)" --version 2>/dev/null | grep -q "$(OAPI_CODEGEN_VERSION)"; then \
+		GOBIN=$(TOOLS_DIR) go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@$(OAPI_CODEGEN_VERSION); \
+	fi
 	@./scripts/regen-client.sh
 
 fmt: tools

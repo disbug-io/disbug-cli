@@ -22,7 +22,7 @@ jobs:
       - run: make codegen
       - id: diff
         run: |
-          if git diff --quiet -- internal/client/generated.go && [ -z "$(git ls-files --others --exclude-standard -- internal/client/generated.go)" ]; then
+          if [ -z "$(git status --porcelain -- internal/client/openapi/generated.go go.mod go.sum)" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -36,4 +36,7 @@ jobs:
           title: "chore(client): regenerate OpenAPI client"
           body: "Auto-regenerated from `${{ env.DISBUG_SCHEMA_URL }}`."
           commit-message: "chore(client): regenerate OpenAPI client"
-          add-paths: internal/client/generated.go
+          add-paths: |
+            internal/client/openapi/generated.go
+            go.mod
+            go.sum
