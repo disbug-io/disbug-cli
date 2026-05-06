@@ -3,10 +3,10 @@ package mcp
 import (
 	"context"
 	"errors"
+	"strings"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/disbug-io/disbug-cli/internal/client"
 	"github.com/disbug-io/disbug-cli/internal/errfmt"
 	"github.com/disbug-io/disbug-cli/internal/ref"
 )
@@ -14,25 +14,46 @@ import (
 // GetPinInput is the input for the get_pin MCP tool.
 type GetPinInput struct {
 	Pin    string   `json:"pin" jsonschema:"pin reference e.g. 7392.2"`
+	Source string   `json:"source,omitempty" jsonschema:"Source: auto, cloud, or local"`
 	Fields []string `json:"fields,omitempty" jsonschema:"array of: screenshot console network events replay voice_note video all"`
 }
 
 func registerGetPin(srv *sdkmcp.Server, deps *Deps) {
-	sdkmcp.AddTool[GetPinInput, client.PinFull](srv, &sdkmcp.Tool{
+	sdkmcp.AddTool[GetPinInput, Result](srv, &sdkmcp.Tool{
 		Name:        "get_pin",
-		Description: "Get a Disbug pin by session.pin reference, optionally selecting included fields.",
+		Description: "Get a Disbug pin by session.pin reference from cloud or local source.",
 	}, func(
 		ctx context.Context,
 		_ *sdkmcp.CallToolRequest,
 		in GetPinInput,
-	) (*sdkmcp.CallToolResult, client.PinFull, error) {
-		if deps == nil || deps.Client == nil {
-			return nil, client.PinFull{}, errors.New("disbug API client is not configured")
+	) (*sdkmcp.CallToolResult, Result, error) {
+		source, err := routeSessionSource(in.Source, strings.TrimSpace(in.Pin), deps)
+		if err != nil {
+			return nil, nil, toolErr(err)
+		}
+		if source == sourceLocal {
+			store, err := requireLocal(deps)
+			if err != nil {
+				return nil, nil, errors.New(err.Error())
+			}
+			sessionID, number, err := parseLocalPinRef(in.Pin)
+			if err != nil {
+				return nil, nil, toolErr(err)
+			}
+			resp, err := store.GetPin(ctx, sessionID, number, in.Fields)
+			if err != nil {
+				return nil, nil, errors.New(mapLocalErr(sessionID, err).Error())
+			}
+			result := Result(resp)
+			return jsonResult(result), result, nil
+		}
+		if err := requireCloud(deps); err != nil {
+			return nil, nil, toolErr(err)
 		}
 
 		pinRef, err := ref.ParsePin(in.Pin)
 		if err != nil {
-			return nil, client.PinFull{}, errors.New(errfmt.Format(&errfmt.UsageError{Message: err.Error()}))
+			return nil, nil, errors.New(errfmt.Format(&errfmt.UsageError{Message: err.Error()}))
 		}
 
 		fields := in.Fields
@@ -41,24 +62,25 @@ func registerGetPin(srv *sdkmcp.Server, deps *Deps) {
 		}
 		fields, err = ref.NormalizeFields(fields)
 		if err != nil {
-			return nil, client.PinFull{}, errors.New(errfmt.Format(&errfmt.UsageError{Message: err.Error()}))
+			return nil, nil, errors.New(errfmt.Format(&errfmt.UsageError{Message: err.Error()}))
 		}
 
 		if err := deps.Client.RequireCapability(ctx, "pin_field_selection"); err != nil {
-			return nil, client.PinFull{}, errors.New(errfmt.Format(err))
+			return nil, nil, errors.New(errfmt.Format(err))
 		}
 		if err := deps.Client.RequireCapability(ctx, "pin_by_number"); err != nil {
-			return nil, client.PinFull{}, errors.New(errfmt.Format(err))
+			return nil, nil, errors.New(errfmt.Format(err))
 		}
 
 		resp, err := deps.Client.GetPinByNumber(ctx, pinRef.Session, pinRef.Pin, fields)
 		if err != nil {
-			return nil, client.PinFull{}, errors.New(errfmt.Format(err))
+			return nil, nil, errors.New(errfmt.Format(err))
 		}
 		if resp == nil {
-			return nil, client.PinFull{}, errors.New("disbug API returned no pin")
+			return nil, nil, errors.New("disbug API returned no pin")
 		}
 
-		return jsonResult(resp), *resp, nil
+		result := resultFrom(resp)
+		return jsonResult(result), result, nil
 	})
 }

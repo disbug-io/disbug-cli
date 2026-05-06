@@ -2,37 +2,56 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/disbug-io/disbug-cli/internal/client"
 	"github.com/disbug-io/disbug-cli/internal/errfmt"
+	"github.com/disbug-io/disbug-cli/internal/localstore"
 )
 
 // ListSessionsInput is the input for the list_sessions MCP tool.
 type ListSessionsInput struct {
+	Source  string `json:"source,omitempty" jsonschema:"Source: auto, cloud, or local"`
 	Status  string `json:"status,omitempty" jsonschema:"Filter by status: open, resolved, or dismissed"`
 	Project string `json:"project,omitempty" jsonschema:"Filter by project slug"`
 	Limit   int    `json:"limit,omitempty" jsonschema:"Maximum results to return; defaults to 50 and is capped at 100"`
 }
 
 func registerListSessions(srv *sdkmcp.Server, deps *Deps) {
-	sdkmcp.AddTool[ListSessionsInput, client.ListSessionsResponse](srv, &sdkmcp.Tool{
+	sdkmcp.AddTool[ListSessionsInput, Result](srv, &sdkmcp.Tool{
 		Name:        "list_sessions",
-		Description: "List Disbug sessions with optional status and project filters.",
+		Description: "List Disbug sessions with optional source, status, and project filters.",
 	}, func(
 		ctx context.Context,
 		_ *sdkmcp.CallToolRequest,
 		in ListSessionsInput,
-	) (*sdkmcp.CallToolResult, client.ListSessionsResponse, error) {
-		if deps == nil || deps.Client == nil {
-			return nil, client.ListSessionsResponse{}, errors.New("disbug API client is not configured")
+	) (*sdkmcp.CallToolResult, Result, error) {
+		source, err := normalizeSource(in.Source)
+		if err != nil {
+			return nil, nil, toolErr(err)
+		}
+		if source == sourceLocal || (source == sourceAuto && deps != nil && !deps.CloudAvailable && deps.LocalStore != nil) {
+			store, err := requireLocal(deps)
+			if err != nil {
+				return nil, nil, errors.New(err.Error())
+			}
+			resp, err := store.ListSessions(ctx, listOptions(in.Limit))
+			if err != nil {
+				return nil, nil, errors.New(err.Error())
+			}
+			result := resultFrom(resp)
+			return jsonResult(result), result, nil
+		}
+		if err := requireCloud(deps); err != nil {
+			return nil, nil, toolErr(err)
 		}
 
 		limit, err := listSessionsLimit(in.Limit)
 		if err != nil {
-			return nil, client.ListSessionsResponse{}, errors.New(errfmt.Format(err))
+			return nil, nil, errors.New(errfmt.Format(err))
 		}
 
 		resp, err := deps.Client.ListSessions(ctx, &client.ListSessionsParams{
@@ -41,14 +60,31 @@ func registerListSessions(srv *sdkmcp.Server, deps *Deps) {
 			Limit:   limit,
 		})
 		if err != nil {
-			return nil, client.ListSessionsResponse{}, errors.New(errfmt.Format(err))
+			return nil, nil, errors.New(errfmt.Format(err))
 		}
 		if resp == nil {
-			return nil, client.ListSessionsResponse{}, errors.New("disbug API returned no sessions")
+			return nil, nil, errors.New("disbug API returned no sessions")
 		}
 
-		return jsonResult(resp), *resp, nil
+		result := resultFrom(resp)
+		return jsonResult(result), result, nil
 	})
+}
+
+func listOptions(limit int) localstore.ListOptions {
+	return localstore.ListOptions{Limit: limit}
+}
+
+func resultFrom(value any) Result {
+	if result, ok := value.(Result); ok {
+		return result
+	}
+	data := jsonText(value)
+	var decoded Result
+	if err := json.Unmarshal([]byte(data), &decoded); err != nil {
+		return Result{"value": value}
+	}
+	return decoded
 }
 
 func listSessionsLimit(limit int) (int, error) {
