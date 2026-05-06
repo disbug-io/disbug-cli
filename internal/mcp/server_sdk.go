@@ -16,6 +16,12 @@ type serveFunc func(context.Context, *mcp.Server) error
 const stdioEOFGrace = 100 * time.Millisecond
 
 func newServer(deps *Deps) *mcp.Server {
+	if deps == nil {
+		deps = &Deps{}
+	}
+	if deps.Client != nil && deps.LocalStore == nil && !deps.CloudAvailable {
+		deps.CloudAvailable = true
+	}
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "disbug",
 		Version: versionStr(),
@@ -28,6 +34,7 @@ func newServer(deps *Deps) *mcp.Server {
 	registerGetPins(srv, deps)
 	registerSearchSessions(srv, deps)
 	registerSearchPins(srv, deps)
+	registerGetLatestLocalSession(srv, deps)
 
 	return srv
 }

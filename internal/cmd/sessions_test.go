@@ -168,6 +168,7 @@ func TestSessionsPrettyOutput(t *testing.T) {
 func setupClient(t *testing.T, srv *httptest.Server) {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("DISBUG_LOCAL_STORE_DIR", t.TempDir())
 	t.Setenv("DISBUG_TOKEN", "")
 	t.Setenv("DISBUG_API_URL", "")
 

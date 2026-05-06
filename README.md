@@ -35,7 +35,7 @@ disbug pin 7392.2 --fields console,network
 
 ### Use as an MCP server
 
-Disbug exposes 7 read-only MCP tools: `whoami`, `list_sessions`, `get_session`, `get_pin`, `get_pins`, `search_sessions`, `search_pins`.
+Disbug exposes read-only MCP tools for cloud and local reports: `whoami`, `list_sessions`, `get_session`, `get_pin`, `get_pins`, `search_sessions`, `search_pins`, and `get_latest_local_session`.
 
 Agent setup recipes:
 
@@ -45,6 +45,26 @@ Agent setup recipes:
 - [Cursor](docs/integrations/cursor.md)
 - [Hermes](docs/integrations/hermes.md)
 - [OpenClaw](docs/integrations/openclaw.md)
+
+### Enable local AI handoff from the browser extension
+
+The Chrome/Brave extension can copy reports directly into a local store that `disbug mcp` can read without uploading to Disbug cloud.
+
+```bash
+disbug setup-local --extension-id <chrome-extension-id>
+```
+
+The command installs Chrome/Brave/Chromium native messaging manifests for `io.disbug.bridge`, registers Disbug MCP where supported, and installs the `disbug-local` agent skill for Codex/Claude skill folders when present. The extension shows the exact command with its runtime extension id after the first markdown copy fallback.
+
+Manage local reports:
+
+```bash
+disbug local-sessions list
+disbug local-sessions show local_...
+disbug local-sessions delete local_...
+disbug local-sessions prune --older-than 30d
+disbug local-sessions path
+```
 
 ### Multi-profile
 

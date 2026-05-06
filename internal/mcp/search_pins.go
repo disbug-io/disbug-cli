@@ -13,35 +13,52 @@ import (
 
 // SearchPinsInput is the input for the search_pins MCP tool.
 type SearchPinsInput struct {
-	Query string `json:"query" jsonschema:"Search query"`
-	Limit int    `json:"limit,omitempty" jsonschema:"Maximum results to return; defaults to 20 and is capped at 50"`
+	Query  string `json:"query" jsonschema:"Search query"`
+	Source string `json:"source,omitempty" jsonschema:"Source: auto, cloud, or local"`
+	Limit  int    `json:"limit,omitempty" jsonschema:"Maximum results to return; defaults to 20 and is capped at 50"`
 }
 
 func registerSearchPins(srv *sdkmcp.Server, deps *Deps) {
-	sdkmcp.AddTool[SearchPinsInput, client.SearchPinsResponse](srv, &sdkmcp.Tool{
+	sdkmcp.AddTool[SearchPinsInput, Result](srv, &sdkmcp.Tool{
 		Name:        "search_pins",
 		Description: "Full-text search over pin feedback within the team, returning matching pins, not session summaries.",
 	}, func(
 		ctx context.Context,
 		_ *sdkmcp.CallToolRequest,
 		in SearchPinsInput,
-	) (*sdkmcp.CallToolResult, client.SearchPinsResponse, error) {
-		if deps == nil || deps.Client == nil {
-			return nil, client.SearchPinsResponse{}, errors.New("disbug API client is not configured")
-		}
+	) (*sdkmcp.CallToolResult, Result, error) {
 		if strings.TrimSpace(in.Query) == "" {
-			return nil, client.SearchPinsResponse{}, errors.New(errfmt.Format(&errfmt.UsageError{
+			return nil, nil, errors.New(errfmt.Format(&errfmt.UsageError{
 				Message: "query is required",
 			}))
+		}
+		source, err := normalizeSource(in.Source)
+		if err != nil {
+			return nil, nil, toolErr(err)
+		}
+		if source == sourceLocal || (source == sourceAuto && deps != nil && !deps.CloudAvailable && deps.LocalStore != nil) {
+			store, err := requireLocal(deps)
+			if err != nil {
+				return nil, nil, errors.New(err.Error())
+			}
+			resp, err := store.SearchPins(ctx, in.Query, in.Limit)
+			if err != nil {
+				return nil, nil, errors.New(err.Error())
+			}
+			result := resultFrom(resp)
+			return jsonResult(result), result, nil
+		}
+		if err := requireCloud(deps); err != nil {
+			return nil, nil, toolErr(err)
 		}
 
 		limit, err := searchLimit(in.Limit)
 		if err != nil {
-			return nil, client.SearchPinsResponse{}, errors.New(errfmt.Format(err))
+			return nil, nil, errors.New(errfmt.Format(err))
 		}
 
 		if err := deps.Client.RequireCapability(ctx, "search"); err != nil {
-			return nil, client.SearchPinsResponse{}, errors.New(errfmt.Format(err))
+			return nil, nil, errors.New(errfmt.Format(err))
 		}
 
 		resp, err := deps.Client.SearchPins(ctx, &client.SearchParams{
@@ -50,12 +67,13 @@ func registerSearchPins(srv *sdkmcp.Server, deps *Deps) {
 			Limit: limit,
 		})
 		if err != nil {
-			return nil, client.SearchPinsResponse{}, errors.New(errfmt.Format(err))
+			return nil, nil, errors.New(errfmt.Format(err))
 		}
 		if resp == nil {
-			return nil, client.SearchPinsResponse{}, errors.New("disbug API returned no search pins")
+			return nil, nil, errors.New("disbug API returned no search pins")
 		}
 
-		return jsonResult(resp), *resp, nil
+		result := resultFrom(resp)
+		return jsonResult(result), result, nil
 	})
 }
