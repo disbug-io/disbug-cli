@@ -130,7 +130,7 @@ func Open(root string) (*Store, error) {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return nil, fmt.Errorf("create local store dir %s: %w", dir, err)
 		}
-		_ = os.Chmod(dir, 0o700)
+		_ = os.Chmod(dir, 0o700) //nolint:gosec // local store directories must remain owner-searchable.
 	}
 
 	db, err := sql.Open("sqlite", filepath.Join(root, "index.sqlite"))
@@ -650,7 +650,9 @@ LIMIT ?`, limit)
 	if err != nil {
 		return ListResponse{}, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var results []SessionSummary
 	for rows.Next() {
@@ -847,7 +849,9 @@ FROM pins WHERE session_id = ? ORDER BY pin_number`, id)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	var pins []pinIndex
 	for rows.Next() {
 		var pin pinIndex

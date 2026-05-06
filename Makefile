@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := build
-.PHONY: build test lint fmt fmt-check tools ci clean run cover codegen
+.PHONY: build test lint fmt fmt-check tools install-hooks ci clean run cover codegen
 
 BIN_DIR := $(CURDIR)/bin
 BIN := $(BIN_DIR)/disbug
@@ -58,6 +58,10 @@ codegen: tools
 		GOBIN=$(TOOLS_DIR) go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@$(OAPI_CODEGEN_VERSION); \
 	fi
 	@./scripts/regen-client.sh
+
+install-hooks:
+	@git config core.hooksPath .githooks
+	@echo "Git hooks installed from .githooks"
 
 fmt: tools
 	@$(GOIMPORTS) -local github.com/disbug-io/disbug-cli -w .

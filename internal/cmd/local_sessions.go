@@ -19,30 +19,38 @@ type LocalSessionsCmd struct {
 	Path   LocalSessionsPathCmd   `cmd:"" name:"path" help:"Print the local session store path."`
 }
 
+// LocalSessionsListCmd lists committed local sessions.
 type LocalSessionsListCmd struct {
 	Limit int `default:"50" help:"Maximum sessions to return."`
 }
 
+// LocalSessionsShowCmd shows one local session.
 type LocalSessionsShowCmd struct {
 	ID string `arg:"" name:"local-id" help:"Local session id."`
 }
 
+// LocalSessionsDeleteCmd deletes one local session.
 type LocalSessionsDeleteCmd struct {
 	ID string `arg:"" name:"local-id" help:"Local session id."`
 }
 
+// LocalSessionsPruneCmd deletes local sessions older than the requested age.
 type LocalSessionsPruneCmd struct {
 	OlderThan string `name:"older-than" required:"" help:"Delete sessions older than duration, e.g. 30d or 12h."`
 }
 
+// LocalSessionsPathCmd prints the local session store path.
 type LocalSessionsPathCmd struct{}
 
+// Run lists local sessions and writes the response as JSON.
 func (c *LocalSessionsListCmd) Run(ctx context.Context, b bindings) error {
 	store, err := localstore.Open("")
 	if err != nil {
 		return err
 	}
-	defer store.Close()
+	defer func() {
+		_ = store.Close()
+	}()
 	resp, err := store.ListSessions(ctx, localstore.ListOptions{Limit: c.Limit})
 	if err != nil {
 		return err
@@ -50,12 +58,15 @@ func (c *LocalSessionsListCmd) Run(ctx context.Context, b bindings) error {
 	return outfmt.WriteJSON(b.Stdout, resp, b.Flags.Pretty)
 }
 
+// Run shows local session metadata as JSON.
 func (c *LocalSessionsShowCmd) Run(ctx context.Context, b bindings) error {
 	store, err := localstore.Open("")
 	if err != nil {
 		return err
 	}
-	defer store.Close()
+	defer func() {
+		_ = store.Close()
+	}()
 	session, err := store.GetSessionSummary(ctx, c.ID)
 	if err != nil {
 		return err
@@ -63,18 +74,22 @@ func (c *LocalSessionsShowCmd) Run(ctx context.Context, b bindings) error {
 	return outfmt.WriteJSON(b.Stdout, session, b.Flags.Pretty)
 }
 
+// Run deletes a local session and writes a confirmation as JSON.
 func (c *LocalSessionsDeleteCmd) Run(ctx context.Context, b bindings) error {
 	store, err := localstore.Open("")
 	if err != nil {
 		return err
 	}
-	defer store.Close()
+	defer func() {
+		_ = store.Close()
+	}()
 	if err := store.DeleteSession(ctx, c.ID); err != nil {
 		return err
 	}
 	return outfmt.WriteJSON(b.Stdout, map[string]any{"deleted": c.ID}, b.Flags.Pretty)
 }
 
+// Run prunes local sessions older than the requested duration.
 func (c *LocalSessionsPruneCmd) Run(ctx context.Context, b bindings) error {
 	olderThan, err := parseRetention(c.OlderThan)
 	if err != nil {
@@ -84,7 +99,9 @@ func (c *LocalSessionsPruneCmd) Run(ctx context.Context, b bindings) error {
 	if err != nil {
 		return err
 	}
-	defer store.Close()
+	defer func() {
+		_ = store.Close()
+	}()
 	removed, err := store.Prune(ctx, localstore.PruneOptions{OlderThan: olderThan})
 	if err != nil {
 		return err
@@ -92,6 +109,7 @@ func (c *LocalSessionsPruneCmd) Run(ctx context.Context, b bindings) error {
 	return outfmt.WriteJSON(b.Stdout, map[string]any{"removed": removed}, b.Flags.Pretty)
 }
 
+// Run prints the local session store path.
 func (c *LocalSessionsPathCmd) Run(ctx context.Context, b bindings) error {
 	root, err := localstore.DefaultRoot()
 	if err != nil {

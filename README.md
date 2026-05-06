@@ -88,6 +88,15 @@ In the agent config, add the binary twice with `args: ["--profile", "work", "mcp
 | 8 | Rate limited (429) |
 | 9 | Server error (5xx) |
 
+## Development
+
+```bash
+make install-hooks
+make ci
+```
+
+The pre-commit hook runs `make fmt-check` and `make lint`.
+
 ## License
 
 MIT - see LICENSE.

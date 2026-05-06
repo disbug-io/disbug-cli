@@ -78,7 +78,9 @@ func printLocalDiagnostics(ctx context.Context, b bindings) {
 		_, _ = fmt.Fprintf(b.Stdout, "local_store FAIL - %s\n", err)
 		return
 	}
-	defer store.Close()
+	defer func() {
+		_ = store.Close()
+	}()
 	pragmas, err := store.Pragmas(ctx)
 	if err != nil {
 		_, _ = fmt.Fprintf(b.Stdout, "local_store_index FAIL - %s\n", err)

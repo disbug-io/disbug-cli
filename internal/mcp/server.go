@@ -82,7 +82,9 @@ func run(ctx context.Context, profile string, stderr io.Writer, serveFn serveFun
 		writef(stderr, "warning: local store unavailable: %s\n", localErr)
 	}
 	if local != nil {
-		defer local.Close()
+		defer func() {
+			_ = local.Close()
+		}()
 	}
 
 	deps := &Deps{Client: cli, LocalStore: local, Me: me, Stderr: stderr, CloudAvailable: tok.Token != ""}

@@ -12,7 +12,10 @@ import (
 	"github.com/disbug-io/disbug-cli/internal/localstore"
 )
 
-const protocolVersion = 1
+const (
+	protocolVersion         = 1
+	maxNativeHostFrameBytes = 1024 * 1024
+)
 
 // Options configures the native messaging host.
 type Options struct {
@@ -41,7 +44,9 @@ func Run(ctx context.Context, stdin io.Reader, stdout io.Writer, opts Options) e
 		_ = WriteFrame(stdout, errorFrame("internal_error", err.Error()))
 		return nil
 	}
-	defer store.Close()
+	defer func() {
+		_ = store.Close()
+	}()
 
 	version := opts.Version
 	if version == "" {
@@ -173,11 +178,12 @@ func WriteFrame(w io.Writer, value any) error {
 	if err != nil {
 		return err
 	}
-	if len(data) > 1024*1024 {
+	if len(data) > maxNativeHostFrameBytes {
 		return fmt.Errorf("native host response exceeds 1 MB")
 	}
 	var header [4]byte
-	binary.LittleEndian.PutUint32(header[:], uint32(len(data)))
+	frameLength := uint32(len(data)) //nolint:gosec // maxNativeHostFrameBytes keeps this below uint32 max.
+	binary.LittleEndian.PutUint32(header[:], frameLength)
 	if _, err := w.Write(header[:]); err != nil {
 		return err
 	}
