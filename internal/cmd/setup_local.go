@@ -24,8 +24,13 @@ func (c *SetupLocalCmd) Run(ctx context.Context, b bindings) error {
 	if err != nil {
 		return err
 	}
-	if b.Flags.Pretty {
+	if b.Flags != nil && b.Flags.Pretty {
 		return outfmt.WriteJSON(b.Stdout, result, true)
+	}
+	if b.Flags == nil || !b.Flags.Verbose {
+		_, _ = fmt.Fprintln(b.Stdout, "Disbug local setup complete. You can now click Copy in the Disbug extension.")
+		_ = ctx
+		return nil
 	}
 	_, _ = fmt.Fprintf(b.Stdout, "native_messaging_manifests: %d\n", len(result.Manifests))
 	for _, manifest := range result.Manifests {
