@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/disbug-io/disbug-cli/internal/localstore"
 	"github.com/disbug-io/disbug-cli/internal/outfmt"
 	"github.com/disbug-io/disbug-cli/internal/setup"
 )
@@ -30,12 +31,17 @@ func (c *SetupLocalCmd) Run(ctx context.Context, b bindings) error {
 	for _, manifest := range result.Manifests {
 		_, _ = fmt.Fprintf(b.Stdout, "- %s\n", manifest)
 	}
-	for agent, status := range result.MCP {
-		_, _ = fmt.Fprintf(b.Stdout, "mcp_%s: %s\n", agent, status)
+	for _, entry := range sortedAgentEntries(result.MCP) {
+		_, _ = fmt.Fprintf(b.Stdout, "mcp_%s: %s\n", entry.agent, entry.status)
 	}
-	for agent, status := range result.Skills {
-		_, _ = fmt.Fprintf(b.Stdout, "skill_%s_disbug_local: %s\n", agent, status)
+	for _, entry := range sortedAgentEntries(result.Skills) {
+		_, _ = fmt.Fprintf(b.Stdout, "skill_%s_disbug_local: %s\n", entry.agent, entry.status)
 	}
+
+	if root, err := localstore.DefaultRoot(); err == nil {
+		_, _ = fmt.Fprintf(b.Stdout, "\nLocal reports will be saved to %s\n", root)
+	}
+	_, _ = fmt.Fprintln(b.Stdout, "Click Copy in the Disbug extension to send a report to your local AI agent.")
 	_ = ctx
 	return nil
 }

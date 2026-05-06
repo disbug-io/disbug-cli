@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/disbug-io/disbug-cli/internal/errfmt"
@@ -22,6 +24,11 @@ func (c *DoctorCmd) Run(ctx context.Context, b bindings) error {
 
 	cli, tok, err := newAuthenticatedClient(b.Flags)
 	if err != nil {
+		var noToken errfmt.NoToken
+		if errors.As(err, &noToken) {
+			_, _ = fmt.Fprintln(b.Stdout, "cloud: not signed in - run `disbug login` to enable cloud MCP tools")
+			return nil
+		}
 		return err
 	}
 
@@ -91,12 +98,26 @@ func printLocalDiagnostics(ctx context.Context, b bindings) {
 		}
 		_, _ = fmt.Fprintln(b.Stdout)
 	}
-	for agent, status := range setup.MCPStatuses(home) {
-		_, _ = fmt.Fprintf(b.Stdout, "mcp_%s: %s\n", agent, status)
+	for _, entry := range sortedAgentEntries(setup.MCPStatuses(home)) {
+		_, _ = fmt.Fprintf(b.Stdout, "mcp_%s: %s\n", entry.agent, entry.status)
 	}
-	for agent, status := range setup.SkillStatuses(home) {
-		_, _ = fmt.Fprintf(b.Stdout, "skill_%s_disbug_local: %s\n", agent, status)
+	for _, entry := range sortedAgentEntries(setup.SkillStatuses(home)) {
+		_, _ = fmt.Fprintf(b.Stdout, "skill_%s_disbug_local: %s\n", entry.agent, entry.status)
 	}
+}
+
+type agentEntry struct {
+	agent  string
+	status string
+}
+
+func sortedAgentEntries(items map[string]string) []agentEntry {
+	entries := make([]agentEntry, 0, len(items))
+	for agent, status := range items {
+		entries = append(entries, agentEntry{agent: agent, status: status})
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].agent < entries[j].agent })
+	return entries
 }
 
 func missingCapabilities(me interface{ HasCapability(string) bool }) []string {

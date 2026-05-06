@@ -112,10 +112,7 @@ func Run(ctx context.Context, stdin io.Reader, stdout io.Writer, opts Options) e
 				continue
 			}
 			nextChunkIndex[msg.Path]++
-			_ = WriteFrame(stdout, map[string]any{
-				"type":           "progress",
-				"bytes_received": len(data),
-			})
+			_ = WriteFrame(stdout, map[string]any{"type": "ack", "message_id": msg.MessageID})
 		case "finish_file":
 			if _, err := localstore.ValidateRelativePath(msg.Path); err != nil {
 				_ = WriteFrame(stdout, errorFrame("retryable", err.Error()))

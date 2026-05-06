@@ -167,18 +167,43 @@ func allowedOrigins(extensionIDs []string) ([]string, error) {
 }
 
 func manifestTargets(goos, home string) []string {
+	hostFile := hostName + ".json"
+	join := func(parts ...string) string {
+		return filepath.Join(append([]string{home}, append(parts, "NativeMessagingHosts", hostFile)...)...)
+	}
 	switch goos {
 	case "darwin":
 		return []string{
-			filepath.Join(home, "Library/Application Support/Google/Chrome/NativeMessagingHosts", hostName+".json"),
-			filepath.Join(home, "Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts", hostName+".json"),
-			filepath.Join(home, "Library/Application Support/Chromium/NativeMessagingHosts", hostName+".json"),
+			join("Library/Application Support/Google/Chrome"),
+			join("Library/Application Support/Google/Chrome Beta"),
+			join("Library/Application Support/Google/Chrome Canary"),
+			join("Library/Application Support/Google/Chrome Dev"),
+			join("Library/Application Support/Chromium"),
+			join("Library/Application Support/BraveSoftware/Brave-Browser"),
+			join("Library/Application Support/BraveSoftware/Brave-Browser-Beta"),
+			join("Library/Application Support/BraveSoftware/Brave-Browser-Nightly"),
+			join("Library/Application Support/Microsoft Edge"),
+			join("Library/Application Support/Microsoft Edge Beta"),
+			join("Library/Application Support/Microsoft Edge Canary"),
+			join("Library/Application Support/Microsoft Edge Dev"),
+			join("Library/Application Support/Vivaldi"),
+			join("Library/Application Support/com.operasoftware.Opera"),
+			join("Library/Application Support/Arc/User Data"),
 		}
 	case "linux":
 		return []string{
-			filepath.Join(home, ".config/google-chrome/NativeMessagingHosts", hostName+".json"),
-			filepath.Join(home, ".config/BraveSoftware/Brave-Browser/NativeMessagingHosts", hostName+".json"),
-			filepath.Join(home, ".config/chromium/NativeMessagingHosts", hostName+".json"),
+			join(".config/google-chrome"),
+			join(".config/google-chrome-beta"),
+			join(".config/google-chrome-unstable"),
+			join(".config/chromium"),
+			join(".config/BraveSoftware/Brave-Browser"),
+			join(".config/BraveSoftware/Brave-Browser-Beta"),
+			join(".config/BraveSoftware/Brave-Browser-Nightly"),
+			join(".config/microsoft-edge"),
+			join(".config/microsoft-edge-beta"),
+			join(".config/microsoft-edge-dev"),
+			join(".config/vivaldi"),
+			join(".config/opera"),
 		}
 	default:
 		return nil
@@ -286,14 +311,7 @@ func registerClaudeCode() string {
 }
 
 func claudeCodeStatus(home string) string {
-	configStatus := mcpJSONStatus(filepath.Join(home, ".claude.json"))
-	if configStatus == "registered" {
-		return "registered"
-	}
-	if _, err := lookPath("claude"); err != nil {
-		return "not detected"
-	}
-	return "outdated"
+	return mcpJSONStatus(filepath.Join(home, ".claude.json"))
 }
 
 func mergeCodexConfig(path string) error {
@@ -344,6 +362,9 @@ func mcpJSONStatus(path string) string {
 	}
 	data, err := os.ReadFile(path) //nolint:gosec // user config path.
 	if err != nil {
+		if os.IsNotExist(err) {
+			return "not detected"
+		}
 		return "outdated"
 	}
 	var config map[string]any

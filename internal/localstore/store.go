@@ -352,14 +352,18 @@ func (r *Report) writeFile(relPath string, data []byte, appendData bool) error {
 	if err != nil {
 		return err
 	}
+	previousSize := r.fileSizes[clean]
 	newFileSize := int64(len(data))
 	if appendData {
-		newFileSize += r.fileSizes[clean]
+		newFileSize += previousSize
 	}
 	if newFileSize > maxFileBytes {
 		return fmt.Errorf("file %s exceeds %d bytes", clean, maxFileBytes)
 	}
 	nextTotal := r.totalSize + int64(len(data))
+	if !appendData {
+		nextTotal -= previousSize
+	}
 	if nextTotal > maxReportBytes {
 		return fmt.Errorf("report exceeds %d bytes", maxReportBytes)
 	}
