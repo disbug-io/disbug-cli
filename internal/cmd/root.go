@@ -11,6 +11,7 @@ import (
 
 	"github.com/disbug-io/disbug-cli/internal/errfmt"
 	"github.com/disbug-io/disbug-cli/internal/mcp"
+	"github.com/disbug-io/disbug-cli/internal/nativehost"
 )
 
 // RootFlags are global flags accepted by every command.
@@ -69,6 +70,11 @@ func Execute(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 	}
 	if stderr == nil {
 		stderr = io.Discard
+	}
+	if isNativeHostLaunch(args) {
+		return nativehost.Run(ctx, stdin, stdout, nativehost.Options{
+			Version: VersionString(),
+		})
 	}
 	if len(args) == 0 {
 		args = []string{"--help"}
@@ -135,4 +141,12 @@ func Execute(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 		return runErr
 	}
 	return nil
+}
+
+func isNativeHostLaunch(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	first := strings.ToLower(strings.TrimSpace(args[0]))
+	return strings.HasPrefix(first, "chrome-extension://") || strings.HasPrefix(first, "chrome-extension:")
 }

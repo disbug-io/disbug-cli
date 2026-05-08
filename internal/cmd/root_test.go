@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/disbug-io/disbug-cli/internal/errfmt"
+	"github.com/disbug-io/disbug-cli/internal/nativehost"
 )
 
 func TestExecuteNoArgsShowsHelp(t *testing.T) {
@@ -68,4 +70,34 @@ func TestExecuteMCPHelpIncludesCommand(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, stdout.String(), "Run MCP integration commands.")
 	assert.Empty(t, stderr.String())
+}
+
+func TestExecuteChromeNativeHostLaunchRunsNativeHost(t *testing.T) {
+	var stdin bytes.Buffer
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	require.NoError(t, nativehost.WriteFrame(&stdin, map[string]any{
+		"type":     "hello",
+		"protocol": 1,
+	}))
+
+	err := Execute(
+		context.Background(),
+		[]string{"chrome-extension://cbfgdbbedpniplghinlebdmlaflnkdah/", "0"},
+		&stdin,
+		&stdout,
+		&stderr,
+	)
+
+	require.NoError(t, err)
+	assert.Empty(t, stderr.String())
+
+	var frame map[string]any
+	require.NoError(t, nativehost.ReadFrame(&stdout, &frame))
+	assert.Equal(t, "hello_ack", frame["type"])
+	assert.Equal(t, float64(1), frame["protocol"])
+
+	_, decodeErr := json.Marshal(frame)
+	require.NoError(t, decodeErr)
 }
