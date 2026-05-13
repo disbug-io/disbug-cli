@@ -34,13 +34,27 @@ func (c *LogoutCmd) Run(ctx context.Context, b bindings) error {
 	}
 
 	if err := cli.RevokeToken(ctx); err != nil {
-		if isTokenRevoked(err) {
+		if isTokenRevoked(err) || isNotFound(err) {
 			return token.Delete(profile)
 		}
 		return err
 	}
 
 	return token.Delete(profile)
+}
+
+func isNotFound(err error) bool {
+	var api errfmt.APIError
+	if errors.As(err, &api) {
+		return api.StatusCode == 404 || api.Code == "not_found"
+	}
+
+	var apiPtr *errfmt.APIError
+	if errors.As(err, &apiPtr) && apiPtr != nil {
+		return apiPtr.StatusCode == 404 || apiPtr.Code == "not_found"
+	}
+
+	return false
 }
 
 func isTokenRevoked(err error) bool {

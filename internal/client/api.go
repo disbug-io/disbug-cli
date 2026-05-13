@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -17,10 +18,38 @@ type Project struct {
 	Name string `json:"name"`
 }
 
+// UnmarshalJSON handles cases where the API returns a project ID instead of an object.
+func (p *Project) UnmarshalJSON(data []byte) error {
+	if len(data) > 0 && data[0] >= '0' && data[0] <= '9' {
+		return nil // Ignore integer IDs
+	}
+	type Alias Project
+	var a Alias
+	if err := json.Unmarshal(data, &a); err != nil {
+		return err
+	}
+	*p = Project(a)
+	return nil
+}
+
 // Reporter is the user-facing reporter identity attached to a session.
 type Reporter struct {
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
+}
+
+// UnmarshalJSON handles cases where the API returns a reporter ID instead of an object.
+func (r *Reporter) UnmarshalJSON(data []byte) error {
+	if len(data) > 0 && data[0] >= '0' && data[0] <= '9' {
+		return nil // Ignore integer IDs
+	}
+	type Alias Reporter
+	var a Alias
+	if err := json.Unmarshal(data, &a); err != nil {
+		return err
+	}
+	*r = Reporter(a)
+	return nil
 }
 
 // SessionSummary is a compact session record returned by ListSessions.
