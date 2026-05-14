@@ -6,3 +6,5 @@
 coverage.txt
 .envrc
 .DS_Store
+disbug.exe
+*.exe
