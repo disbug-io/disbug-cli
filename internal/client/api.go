@@ -38,10 +38,12 @@ type SessionSummary struct {
 
 // ListSessionsParams holds optional filters for ListSessions.
 type ListSessionsParams struct {
-	Status  string
-	Project string
-	Limit   int
-	Cursor  string
+	Status          string
+	Project         string
+	Limit           int
+	Cursor          string
+	CreatedAtAfter  string
+	CreatedAtBefore string
 }
 
 // ListSessionsResponse is the paginated session list response.
@@ -93,6 +95,12 @@ func (c *Client) ListSessions(ctx context.Context, p *ListSessionsParams) (*List
 		}
 		if p.Cursor != "" {
 			query.Set("cursor", p.Cursor)
+		}
+		if p.CreatedAtAfter != "" {
+			query.Set("created_at_after", p.CreatedAtAfter)
+		}
+		if p.CreatedAtBefore != "" {
+			query.Set("created_at_before", p.CreatedAtBefore)
 		}
 		if encoded := query.Encode(); encoded != "" {
 			path += "?" + encoded

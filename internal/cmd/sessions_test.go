@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/disbug-io/disbug-cli/internal/errfmt"
 	"github.com/disbug-io/disbug-cli/internal/token"
@@ -75,6 +76,21 @@ func TestSessionsIncludesQueryParams(t *testing.T) {
 		if got, want := query.Get("cursor"), "next-1"; got != want {
 			t.Fatalf("cursor query = %q, want %q", got, want)
 		}
+		if got := query.Get("since"); got != "" {
+			t.Fatalf("since query = %q, want empty", got)
+		}
+		createdAtAfter := query.Get("created_at_after")
+		if createdAtAfter == "" {
+			t.Fatal("created_at_after query is empty")
+		}
+		parsed, err := time.Parse(time.RFC3339, createdAtAfter)
+		if err != nil {
+			t.Fatalf("created_at_after query = %q, want RFC3339 timestamp: %v", createdAtAfter, err)
+		}
+		if parsed.Before(time.Now().UTC().Add(-2*time.Hour-5*time.Second)) ||
+			parsed.After(time.Now().UTC().Add(-2*time.Hour+5*time.Second)) {
+			t.Fatalf("created_at_after query = %s, want about 2h ago", parsed)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"results":[],"next_cursor":null,"count":0,"free_tier_truncated":false}`)
@@ -82,12 +98,47 @@ func TestSessionsIncludesQueryParams(t *testing.T) {
 	t.Cleanup(srv.Close)
 	setupClient(t, srv)
 
-	_, stderr, err := executeSessions(t, "sessions", "--project", "web", "--limit", "25", "--cursor", "next-1")
+	_, stderr, err := executeSessions(t, "sessions", "--project", "web", "--limit", "25", "--cursor", "next-1", "--since", "2h")
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}
 	if got := stderr; got != "" {
 		t.Fatalf("stderr = %q, want empty", got)
+	}
+}
+
+func TestSessionsInvalidSinceReturnsUsageAndDoesNotCallHTTP(t *testing.T) {
+	var called bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+	setupClient(t, srv)
+
+	stdout, stderr, err := executeSessions(t, "sessions", "--since", "1d")
+
+	if err == nil {
+		t.Fatal("Execute() error = nil, want usage error")
+	}
+	if got, want := ExitCode(err), 2; got != want {
+		t.Fatalf("ExitCode() = %d, want %d", got, want)
+	}
+	var usage *errfmt.UsageError
+	if !errors.As(err, &usage) {
+		t.Fatalf("Execute() error = %T, want errfmt.UsageError", err)
+	}
+	if got, want := usage.Message, "--since must be a duration using s, m, or h up to 8760h"; got != want {
+		t.Fatalf("usage message = %q, want %q", got, want)
+	}
+	if called {
+		t.Fatal("server was called for invalid since")
+	}
+	if got := stdout; got != "" {
+		t.Fatalf("stdout = %q, want empty", got)
+	}
+	if got := stderr; got != "--since must be a duration using s, m, or h up to 8760h\n" {
+		t.Fatalf("stderr = %q, want usage message", got)
 	}
 }
 

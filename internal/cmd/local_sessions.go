@@ -21,7 +21,8 @@ type LocalSessionsCmd struct {
 
 // LocalSessionsListCmd lists committed local sessions.
 type LocalSessionsListCmd struct {
-	Limit int `default:"50" help:"Maximum sessions to return."`
+	Limit int    `default:"50" help:"Maximum sessions to return."`
+	Since string `help:"Only include sessions newer than this duration, e.g. 30s, 15m, or 2h."`
 }
 
 // LocalSessionsShowCmd shows one local session.
@@ -44,6 +45,11 @@ type LocalSessionsPathCmd struct{}
 
 // Run lists local sessions and writes the response as JSON.
 func (c *LocalSessionsListCmd) Run(ctx context.Context, b bindings) error {
+	_, sinceDuration, err := parseSinceFlag(c.Since)
+	if err != nil {
+		return err
+	}
+
 	store, err := localstore.Open("")
 	if err != nil {
 		return err
@@ -51,7 +57,11 @@ func (c *LocalSessionsListCmd) Run(ctx context.Context, b bindings) error {
 	defer func() {
 		_ = store.Close()
 	}()
-	resp, err := store.ListSessions(ctx, localstore.ListOptions{Limit: c.Limit})
+	opts := localstore.ListOptions{Limit: c.Limit}
+	if sinceDuration > 0 {
+		opts.Since = time.Now().UTC().Add(-sinceDuration)
+	}
+	resp, err := store.ListSessions(ctx, opts)
 	if err != nil {
 		return err
 	}
