@@ -3,6 +3,9 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +13,7 @@ import (
 	"time"
 
 	"github.com/disbug-io/disbug-cli/internal/localstore"
+	"github.com/disbug-io/disbug-cli/internal/token"
 )
 
 func TestLocalBackfillEventsEmitChronologicalSessionNewEvents(t *testing.T) {
@@ -273,8 +277,111 @@ func TestWatchLocalPollWithSinceDoesNotEmitOlderExistingSessions(t *testing.T) {
 	}
 }
 
+func TestWatchCloudOnlyBackfillsAndPollsCloudSessions(t *testing.T) {
+	var listRequests int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/sessions/":
+			listRequests++
+			if got := r.URL.Query().Get("created_at_after"); got == "" {
+				t.Fatal("created_at_after query is empty")
+			}
+			if got, want := r.URL.Query().Get("status"), "open"; got != want {
+				t.Fatalf("status query = %q, want %q", got, want)
+			}
+			if got, want := r.URL.Query().Get("project"), "web"; got != want {
+				t.Fatalf("project query = %q, want %q", got, want)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{
+				"results":[{
+					"id":123,
+					"project":{"slug":"web","name":"Website"},
+					"url":"https://example.test/page",
+					"status":"open",
+					"pin_count":1,
+					"first_pin_feedback":"cloud feedback",
+					"reporter":{"email":"r@example.test","display_name":"Reporter"},
+					"created_at":"2026-05-23T08:20:00Z",
+					"updated_at":"2026-05-23T08:21:00Z",
+					"free_tier_locked":false
+				}],
+				"next_cursor":null,
+				"count":1,
+				"free_tier_truncated":false
+			}`)
+		case "/api/sessions/123/":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{
+				"id":123,
+				"status":"open",
+				"project":{"slug":"web","name":"Website"},
+				"reporter":{"email":"r@example.test","display_name":"Reporter"},
+				"url":"https://example.test/page",
+				"updated_at":"2026-05-23T08:21:00Z",
+				"pins":[{"id":456,"number":1,"feedback":"cloud feedback","url":"https://example.test/page#pin"}]
+			}`)
+		default:
+			t.Fatalf("unexpected request path %s", r.URL.Path)
+		}
+	}))
+	t.Cleanup(server.Close)
+	setupWatchClient(t, server)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := Execute(
+		ctx,
+		[]string{"watch", "--cloud-only", "--since", "2h", "--status", "open", "--project", "web", "--poll-interval", "1ms"},
+		nil,
+		&stdout,
+		&stderr,
+	)
+	if err != nil {
+		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr.String())
+	}
+
+	output := stdout.String()
+	for _, want := range []string{
+		`"source":"cloud"`,
+		`"backfill":true`,
+		`"id":"123"`,
+		`"ref":"disbug://cloud/123"`,
+		`"project":"web"`,
+		`"pin_number":1`,
+		`"feedback":"cloud feedback"`,
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("stdout = %q, want %q", output, want)
+		}
+	}
+	if got := strings.Count(output, `"id":"123"`); got != 1 {
+		t.Fatalf("cloud session emitted %d times, want once; stdout=%q", got, output)
+	}
+	if listRequests < 2 {
+		t.Fatalf("listRequests = %d, want backfill and live poll", listRequests)
+	}
+	if got := stderr.String(); !strings.Contains(got, "watching: cloud") {
+		t.Fatalf("stderr = %q, want cloud startup line", got)
+	}
+}
+
 func fixedWatchNow() time.Time {
 	return time.Date(2026, 5, 23, 8, 24, 43, 0, time.UTC)
+}
+
+func setupWatchClient(t *testing.T, srv *httptest.Server) {
+	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("DISBUG_LOCAL_STORE_DIR", t.TempDir())
+	t.Setenv("DISBUG_TOKEN", "")
+	t.Setenv("DISBUG_API_URL", "")
+
+	if err := token.Write("default", token.Token{Token: "test-token", APIURL: srv.URL}, false); err != nil {
+		t.Fatalf("token.Write() error = %v", err)
+	}
 }
 
 func writeWatchReportFixture(t *testing.T, report *localstore.Report, feedback string) {

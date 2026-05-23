@@ -32,6 +32,7 @@ type SessionSummary struct {
 	PinCount         int       `json:"pin_count"`
 	FirstPinFeedback string    `json:"first_pin_feedback"`
 	Reporter         *Reporter `json:"reporter"`
+	CreatedAt        string    `json:"created_at"`
 	UpdatedAt        string    `json:"updated_at"`
 	FreeTierLocked   bool      `json:"free_tier_locked"`
 }
