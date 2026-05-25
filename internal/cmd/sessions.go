@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"context"
-	"fmt"
-	"strconv"
-	"strings"
+	"time"
 
 	"github.com/disbug-io/disbug-cli/internal/client"
 	"github.com/disbug-io/disbug-cli/internal/errfmt"
@@ -17,12 +15,21 @@ type SessionsCmd struct {
 	Project string `help:"Filter by project slug or ID"`
 	Limit   int    `help:"Max results (1-100)" default:"50"`
 	Cursor  string `help:"Pagination cursor"`
+	Since   string `help:"Only include sessions newer than this duration, e.g. 30s, 15m, or 2h."`
 }
 
 // Run lists sessions and writes the paginated response as JSON.
 func (c *SessionsCmd) Run(ctx context.Context, b bindings) error {
 	if c.Limit < 1 || c.Limit > 100 {
 		return &errfmt.UsageError{Message: "--limit must be between 1 and 100"}
+	}
+	_, sinceDuration, err := parseSinceFlag(c.Since)
+	if err != nil {
+		return err
+	}
+	createdAtAfter := ""
+	if sinceDuration > 0 {
+		createdAtAfter = time.Now().UTC().Add(-sinceDuration).Format(time.RFC3339)
 	}
 
 	cli, _, err := newAuthenticatedClient(b.Flags)
@@ -46,6 +53,11 @@ func (c *SessionsCmd) Run(ctx context.Context, b bindings) error {
 	resp, err := cli.ListSessions(ctx, &client.ListSessionsParams{
 		Limit:  100,
 		Cursor: cursor,
+		Status:         c.Status,
+		Project:        c.Project,
+		Limit:          c.Limit,
+		Cursor:         c.Cursor,
+		CreatedAtAfter: createdAtAfter,
 	})
 	if err != nil {
 		return err

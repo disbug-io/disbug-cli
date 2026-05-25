@@ -183,6 +183,60 @@ func TestStorePruneRemovesOldCommittedSessions(t *testing.T) {
 	}
 }
 
+func TestStoreListSessionsFiltersSinceCutoff(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+	})
+
+	oldReport, err := store.BeginReport(ctx, ReportMetadata{
+		URL:       "https://old.example.test",
+		CreatedAt: "2026-05-01T00:00:00Z",
+	})
+	if err != nil {
+		t.Fatalf("BeginReport(old) error = %v", err)
+	}
+	writeReportFixture(t, oldReport)
+	oldCommitted, err := oldReport.Commit(ctx)
+	if err != nil {
+		t.Fatalf("Commit(old) error = %v", err)
+	}
+
+	newReport, err := store.BeginReport(ctx, ReportMetadata{
+		URL:       "https://new.example.test",
+		CreatedAt: "2026-05-03T00:00:00Z",
+	})
+	if err != nil {
+		t.Fatalf("BeginReport(new) error = %v", err)
+	}
+	writeReportFixture(t, newReport)
+	newCommitted, err := newReport.Commit(ctx)
+	if err != nil {
+		t.Fatalf("Commit(new) error = %v", err)
+	}
+
+	since := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
+	list, err := store.ListSessions(ctx, ListOptions{Limit: 10, Since: since})
+	if err != nil {
+		t.Fatalf("ListSessions() error = %v", err)
+	}
+	if got, want := len(list.Results), 1; got != want {
+		t.Fatalf("ListSessions results = %d, want %d", got, want)
+	}
+	if got, want := list.Results[0].ID, newCommitted.ID; got != want {
+		t.Fatalf("ListSessions result ID = %q, want %q", got, want)
+	}
+	if got, notWant := list.Results[0].ID, oldCommitted.ID; got == notWant {
+		t.Fatalf("ListSessions included old ID = %q", got)
+	}
+}
+
 func writeReportFixture(t *testing.T, report *Report) {
 	t.Helper()
 

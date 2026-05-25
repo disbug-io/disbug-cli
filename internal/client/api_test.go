@@ -30,6 +30,9 @@ func TestListSessions(t *testing.T) {
 		if got, want := query.Get("cursor"), "next-1"; got != want {
 			t.Fatalf("cursor query = %q, want %q", got, want)
 		}
+		if got, want := query.Get("created_at_after"), "2026-05-23T09:30:00Z"; got != want {
+			t.Fatalf("created_at_after query = %q, want %q", got, want)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{
@@ -54,10 +57,11 @@ func TestListSessions(t *testing.T) {
 	c := New(server.URL, "t", "test", nil, server.Client(), nil)
 
 	resp, err := c.ListSessions(context.Background(), &ListSessionsParams{
-		Status:  "open",
-		Project: "web",
-		Limit:   25,
-		Cursor:  "next-1",
+		Status:         "open",
+		Project:        "web",
+		Limit:          25,
+		Cursor:         "next-1",
+		CreatedAtAfter: "2026-05-23T09:30:00Z",
 	})
 	if err != nil {
 		t.Fatalf("ListSessions() error = %v, want nil", err)

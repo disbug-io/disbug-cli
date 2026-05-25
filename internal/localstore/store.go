@@ -76,6 +76,7 @@ type CommittedReport struct {
 type ListOptions struct {
 	Limit int
 	Query string
+	Since time.Time
 }
 
 // ListResponse mirrors the cloud list response shape with local string ids.
@@ -641,12 +642,20 @@ func truncate(value string, max int) string {
 func (s *Store) ListSessions(ctx context.Context, opts ListOptions) (ListResponse, error) {
 	limit := clampLimit(opts.Limit)
 	query := strings.TrimSpace(strings.ToLower(opts.Query))
-	rows, err := s.db.QueryContext(ctx, `SELECT id, created_at, updated_at, source_url, commit_status,
+	where := "WHERE commit_status = 'committed'"
+	args := []any{}
+	if !opts.Since.IsZero() {
+		where += " AND created_at >= ?"
+		args = append(args, opts.Since.UTC().Format(time.RFC3339))
+	}
+	args = append(args, limit)
+
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`SELECT id, created_at, updated_at, source_url, commit_status,
 pin_count, first_pin_feedback, report_path, total_size
 FROM sessions
-WHERE commit_status = 'committed'
+%s
 ORDER BY created_at DESC
-LIMIT ?`, limit)
+LIMIT ?`, where), args...)
 	if err != nil {
 		return ListResponse{}, err
 	}
