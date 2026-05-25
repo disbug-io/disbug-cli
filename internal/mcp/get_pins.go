@@ -80,11 +80,13 @@ func registerGetPins(srv *sdkmcp.Server, deps *Deps) {
 		}
 		unique := ref.DedupAndUnion(parsed)
 
-		if err := deps.Client.RequireCapability(ctx, "pin_field_selection"); err != nil {
-			return nil, nil, errors.New(errfmt.Format(err))
-		}
 		if err := deps.Client.RequireCapability(ctx, "pin_by_number"); err != nil {
 			return nil, nil, errors.New(errfmt.Format(err))
+		}
+		if ref.AnyNeedsFieldSelection(unique) {
+			if err := deps.Client.RequireCapability(ctx, "pin_field_selection"); err != nil {
+				return nil, nil, errors.New(errfmt.Format(err))
+			}
 		}
 
 		res := deps.Client.GetPinsBulk(ctx, unique)

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/disbug-io/disbug-cli/internal/errfmt"
+	"github.com/disbug-io/disbug-cli/internal/setup"
 )
 
 func TestDoctor_Healthy(t *testing.T) {
@@ -141,4 +142,27 @@ func executeDoctor(t *testing.T, args ...string) (string, string, error) {
 	var stderr bytes.Buffer
 	err := Execute(context.Background(), args, nil, &stdout, &stderr)
 	return stdout.String(), stderr.String(), err
+}
+
+func TestSummarizeManifestDiagnostics(t *testing.T) {
+	t.Run("all registered", func(t *testing.T) {
+		got := summarizeManifestDiagnostics([]setup.ManifestDiagnostic{
+			{Status: "registered"},
+			{Status: "registered"},
+		})
+		if got != "registered" {
+			t.Fatalf("summarizeManifestDiagnostics() = %q, want %q", got, "registered")
+		}
+	})
+
+	t.Run("issues detected", func(t *testing.T) {
+		got := summarizeManifestDiagnostics([]setup.ManifestDiagnostic{
+			{Status: "registered"},
+			{Status: "missing"},
+			{Status: "outdated"},
+		})
+		if got != "issues detected (2/3 registrations need attention)" {
+			t.Fatalf("summarizeManifestDiagnostics() = %q", got)
+		}
+	})
 }

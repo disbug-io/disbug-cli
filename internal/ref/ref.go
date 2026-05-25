@@ -44,6 +44,21 @@ var wireFields = map[string]string{
 	"video":      "video_recording",
 }
 
+// NeedsFieldSelection reports whether the fetch specifies fields other than "all".
+func (f PinFetch) NeedsFieldSelection() bool {
+	return len(f.Fields) != 1 || f.Fields[0] != "all"
+}
+
+// AnyNeedsFieldSelection reports whether any fetch in the slice specifies fields other than "all".
+func AnyNeedsFieldSelection(fetches []PinFetch) bool {
+	for _, f := range fetches {
+		if f.NeedsFieldSelection() {
+			return true
+		}
+	}
+	return false
+}
+
 // ParseSession parses a positive integer session reference.
 func ParseSession(arg string) (SessionRef, error) {
 	id, err := parsePositiveInt(arg)
@@ -54,7 +69,7 @@ func ParseSession(arg string) (SessionRef, error) {
 	return SessionRef{ID: id}, nil
 }
 
-// ParsePin parses a positive session and pin reference in session.pin form.
+// ParsePin parses a positive session and non-negative pin reference in session.pin form.
 func ParsePin(arg string) (PinRef, error) {
 	parts := strings.Split(arg, ".")
 	if len(parts) != 2 {
@@ -66,7 +81,7 @@ func ParsePin(arg string) (PinRef, error) {
 		return PinRef{}, fmt.Errorf("invalid pin ref %q: %w", arg, err)
 	}
 
-	pin, err := parsePositiveInt(parts[1])
+	pin, err := parseNonNegativeInt(parts[1])
 	if err != nil {
 		return PinRef{}, fmt.Errorf("invalid pin ref %q: %w", arg, err)
 	}
@@ -203,6 +218,18 @@ func unionFields(fieldLists ...[]string) []string {
 }
 
 func parsePositiveInt(arg string) (int64, error) {
+	value, err := parseNonNegativeInt(arg)
+	if err != nil {
+		return 0, err
+	}
+	if value <= 0 {
+		return 0, fmt.Errorf("not a positive integer")
+	}
+
+	return value, nil
+}
+
+func parseNonNegativeInt(arg string) (int64, error) {
 	if arg == "" {
 		return 0, fmt.Errorf("empty value")
 	}
@@ -216,9 +243,6 @@ func parsePositiveInt(arg string) (int64, error) {
 	value, err := strconv.ParseInt(arg, 10, 64)
 	if err != nil {
 		return 0, err
-	}
-	if value <= 0 {
-		return 0, fmt.Errorf("not a positive integer")
 	}
 
 	return value, nil

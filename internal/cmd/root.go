@@ -74,6 +74,12 @@ func Execute(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 		args = []string{"--help"}
 	}
 
+	// If the first argument looks like a chrome-extension origin,
+	// it's an invocation from the browser. Redirect to native-host.
+	if len(args) > 0 && strings.HasPrefix(args[0], "chrome-extension://") {
+		args = []string{"native-host"}
+	}
+
 	level := slog.LevelWarn
 	defer func() {
 		if recovered := recover(); recovered != nil {

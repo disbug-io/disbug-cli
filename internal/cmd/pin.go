@@ -32,11 +32,14 @@ func (c *PinCmd) Run(ctx context.Context, b bindings) error {
 		return err
 	}
 
-	if err := cli.RequireCapability(ctx, "pin_field_selection"); err != nil {
-		return err
-	}
 	if err := cli.RequireCapability(ctx, "pin_by_number"); err != nil {
 		return err
+	}
+	fetch := ref.PinFetch{Pin: pinRef, Fields: fields}
+	if fetch.NeedsFieldSelection() {
+		if err := cli.RequireCapability(ctx, "pin_field_selection"); err != nil {
+			return err
+		}
 	}
 
 	resp, err := cli.GetPinByNumber(ctx, pinRef.Session, pinRef.Pin, fields)

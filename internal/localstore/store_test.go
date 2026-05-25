@@ -88,7 +88,7 @@ func TestStoreCommitRejectsTraversalAndIndexesReport(t *testing.T) {
 	if !ok {
 		t.Fatalf("pin screenshot = %#v, want asset envelope", pin["screenshot"])
 	}
-	if path, _ := screenshot["path"].(string); !filepath.IsAbs(path) || !strings.HasSuffix(path, "pin_1/screenshot.png") {
+	if path, _ := screenshot["path"].(string); !filepath.IsAbs(path) || !strings.HasSuffix(filepath.ToSlash(path), "pin_1/screenshot.png") {
 		t.Fatalf("screenshot path = %#v, want absolute pin path", screenshot["path"])
 	}
 

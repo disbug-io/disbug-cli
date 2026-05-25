@@ -232,7 +232,7 @@ func TestGetPins_MissingCapabilityReturnsToolError(t *testing.T) {
 	srv := newServer(&Deps{Client: cli})
 
 	res, err := callTool(t, srv, "get_pins", map[string]any{
-		"items": []map[string]any{{"pin": "7392.2"}},
+		"items": []map[string]any{{"pin": "7392.2", "fields": []string{"console"}}},
 	})
 	if err != nil {
 		t.Fatalf("CallTool(get_pins) error = %v, want nil tool error result", err)

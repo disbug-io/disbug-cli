@@ -33,8 +33,18 @@ func (c *SearchCmd) Run(ctx context.Context, b bindings) error {
 		return err
 	}
 
-	if err := cli.RequireCapability(ctx, "search"); err != nil {
+	me, err := cli.MeCached(ctx)
+	if err != nil {
 		return err
+	}
+
+	if !me.HasCapability("search") {
+		if c.Scope == "pins" {
+			return &errfmt.UserFacingError{
+				Message: "Pin search requires Disbug API capability \"search\"; your team's instance does not advertise it. Local fallback is currently only available for scope \"sessions\".",
+			}
+		}
+		return c.runLocal(ctx, b, cli)
 	}
 
 	params := &client.SearchParams{
@@ -58,4 +68,29 @@ func (c *SearchCmd) Run(ctx context.Context, b bindings) error {
 	}
 
 	return nil
+}
+
+func (c *SearchCmd) runLocal(ctx context.Context, b bindings, cli *client.Client) error {
+	resp, err := cli.ListSessions(ctx, &client.ListSessionsParams{Limit: 100})
+	if err != nil {
+		return err
+	}
+
+	query := strings.ToLower(strings.TrimSpace(c.Query))
+	var filtered []client.SessionSummary
+	for _, s := range resp.Results {
+		if s.Matches(query) {
+			filtered = append(filtered, s)
+		}
+	}
+
+	total := len(filtered)
+	if len(filtered) > c.Limit {
+		filtered = filtered[:c.Limit]
+	}
+
+	return outfmt.WriteJSON(b.Stdout, &client.SearchSessionsResponse{
+		Results: filtered,
+		Total:   total,
+	}, b.Flags.Pretty)
 }

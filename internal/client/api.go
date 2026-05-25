@@ -25,15 +25,65 @@ type Reporter struct {
 
 // SessionSummary is a compact session record returned by ListSessions.
 type SessionSummary struct {
-	ID               int64     `json:"id"`
-	Project          *Project  `json:"project"`
-	URL              string    `json:"url"`
-	Status           string    `json:"status"`
-	PinCount         int       `json:"pin_count"`
-	FirstPinFeedback string    `json:"first_pin_feedback"`
-	Reporter         *Reporter `json:"reporter"`
-	UpdatedAt        string    `json:"updated_at"`
-	FreeTierLocked   bool      `json:"free_tier_locked"`
+	ID               int64  `json:"id"`
+	Project          any    `json:"project"` // Can be int (ID) or Project struct
+	ProjectName      string `json:"project_name,omitempty"`
+	URL              string `json:"url"`
+	Status           string `json:"status"`
+	PinCount         int    `json:"pin_count"`
+	FirstPinFeedback string `json:"first_pin_feedback"`
+	Reporter         any    `json:"reporter"` // Can be int (ID) or Reporter struct
+	ReporterName     string `json:"reporter_name,omitempty"`
+	UpdatedAt        string `json:"updated_at"`
+	FreeTierLocked   bool   `json:"free_tier_locked"`
+}
+
+// Matches reports whether the session summary contains the query in its metadata.
+// The query should be pre-normalized to lowercase.
+func (s SessionSummary) Matches(query string) bool {
+	if strings.Contains(strconv.FormatInt(s.ID, 10), query) {
+		return true
+	}
+	if strings.Contains(strings.ToLower(s.URL), query) {
+		return true
+	}
+	if strings.Contains(strings.ToLower(s.FirstPinFeedback), query) {
+		return true
+	}
+	if strings.Contains(strings.ToLower(s.ProjectName), query) {
+		return true
+	}
+	if strings.Contains(strings.ToLower(s.ReporterName), query) {
+		return true
+	}
+
+	// Deep match for project
+	switch p := s.Project.(type) {
+	case string:
+		if strings.Contains(strings.ToLower(p), query) {
+			return true
+		}
+	case map[string]any:
+		if name, ok := p["name"].(string); ok && strings.Contains(strings.ToLower(name), query) {
+			return true
+		}
+		if slug, ok := p["slug"].(string); ok && strings.Contains(strings.ToLower(slug), query) {
+			return true
+		}
+	}
+
+	// Deep match for reporter
+	switch r := s.Reporter.(type) {
+	case map[string]any:
+		if name, ok := r["display_name"].(string); ok && strings.Contains(strings.ToLower(name), query) {
+			return true
+		}
+		if email, ok := r["email"].(string); ok && strings.Contains(strings.ToLower(email), query) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // ListSessionsParams holds optional filters for ListSessions.
@@ -178,8 +228,8 @@ type PinLite struct {
 type SessionDetail struct {
 	ID        int64     `json:"id"`
 	Status    string    `json:"status"`
-	Project   *Project  `json:"project"`
-	Reporter  *Reporter `json:"reporter"`
+	Project   any       `json:"project"`
+	Reporter  any       `json:"reporter"`
 	URL       string    `json:"url"`
 	UpdatedAt string    `json:"updated_at"`
 	Pins      []PinLite `json:"pins"`

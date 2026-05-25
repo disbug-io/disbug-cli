@@ -93,13 +93,7 @@ func printLocalDiagnostics(ctx context.Context, b bindings) {
 		_, _ = fmt.Fprintf(b.Stdout, "local_setup FAIL - %s\n", err)
 		return
 	}
-	for _, item := range setup.ManifestDiagnostics(setup.Options{HomeDir: home}) {
-		_, _ = fmt.Fprintf(b.Stdout, "native_manifest %s: %s", item.Path, item.Status)
-		if item.ActualPath != "" && item.ActualPath != item.ExpectedPath {
-			_, _ = fmt.Fprintf(b.Stdout, " - path=%s expected=%s", item.ActualPath, item.ExpectedPath)
-		}
-		_, _ = fmt.Fprintln(b.Stdout)
-	}
+	_, _ = fmt.Fprintf(b.Stdout, "native_host: %s\n", summarizeManifestDiagnostics(setup.ManifestDiagnostics(setup.Options{HomeDir: home})))
 	for _, entry := range sortedAgentEntries(setup.MCPStatuses(home)) {
 		_, _ = fmt.Fprintf(b.Stdout, "mcp_%s: %s\n", entry.agent, entry.status)
 	}
@@ -131,4 +125,17 @@ func missingCapabilities(me interface{ HasCapability(string) bool }) []string {
 	}
 
 	return missing
+}
+
+func summarizeManifestDiagnostics(items []setup.ManifestDiagnostic) string {
+	issues := 0
+	for _, item := range items {
+		if item.Status != "registered" {
+			issues++
+		}
+	}
+	if issues == 0 {
+		return "registered"
+	}
+	return fmt.Sprintf("issues detected (%d/%d registrations need attention)", issues, len(items))
 }

@@ -56,6 +56,64 @@ func TestInstallWritesBrowserManifestsWithExplicitExtensionID(t *testing.T) {
 	}
 }
 
+func TestInstallWritesWindowsManifestAndRegistryKeys(t *testing.T) {
+	home := t.TempDir()
+	localAppData := filepath.Join(home, "AppData", "Local")
+	bin := filepath.Join(home, "bin", "disbug.exe")
+	if err := os.MkdirAll(filepath.Dir(bin), 0o755); err != nil {
+		t.Fatalf("MkdirAll(bin dir) error = %v", err)
+	}
+	if err := os.WriteFile(bin, []byte("windows binary"), 0o755); err != nil {
+		t.Fatalf("WriteFile(bin) error = %v", err)
+	}
+
+	writes := map[string]string{}
+	oldRegistryWrite := registryWrite
+	registryWrite = func(key, value string) error {
+		writes[key] = value
+		return nil
+	}
+	t.Cleanup(func() {
+		registryWrite = oldRegistryWrite
+	})
+
+	result, err := Install(Options{
+		HomeDir:      home,
+		GOOS:         "windows",
+		BinaryPath:   bin,
+		LocalAppData: localAppData,
+		ExtensionIDs: []string{"abcdefghijklmnopabcdefghijklmnop"},
+		SkipMCP:      true,
+	})
+	if err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+	if got, want := len(result.Manifests), 1; got != want {
+		t.Fatalf("installed manifests = %#v, want %d Windows manifest", result.Manifests, want)
+	}
+
+	manifestPath := filepath.Join(localAppData, "disbug", "NativeMessagingHosts", "io.disbug.bridge.json")
+	raw, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("ReadFile(windows manifest) error = %v", err)
+	}
+	var manifest HostManifest
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("Unmarshal(manifest) error = %v", err)
+	}
+	if got, want := manifest.Path, bin; got != want {
+		t.Fatalf("manifest path = %q, want %q", got, want)
+	}
+	if got, want := len(writes), len(windowsRegistryTargets()); got != want {
+		t.Fatalf("registry writes = %#v, want %d browser keys", writes, want)
+	}
+	for _, target := range windowsRegistryTargets() {
+		if got, want := writes[target.key], manifestPath; got != want {
+			t.Fatalf("registry write for %s = %q, want %q", target.key, got, want)
+		}
+	}
+}
+
 func TestInstallRequiresExtensionID(t *testing.T) {
 	_, err := Install(Options{
 		HomeDir:    t.TempDir(),
@@ -154,6 +212,79 @@ func TestManifestDiagnosticsDetectsStaleBinaryPath(t *testing.T) {
 	}
 	if got, want := diagnostics[0].ActualPath, "/old/disbug"; got != want {
 		t.Fatalf("diagnostic actual path = %q, want %q", got, want)
+	}
+}
+
+func TestManifestDiagnosticsReportsWindowsRegistryState(t *testing.T) {
+	home := t.TempDir()
+	localAppData := filepath.Join(home, "AppData", "Local")
+	manifestPath := filepath.Join(localAppData, "disbug", "NativeMessagingHosts", "io.disbug.bridge.json")
+	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o700); err != nil {
+		t.Fatalf("MkdirAll(manifest dir) error = %v", err)
+	}
+	data, err := json.MarshalIndent(HostManifest{
+		Name:           hostName,
+		Description:    "Disbug local AI bridge",
+		Path:           `C:\tools\disbug.exe`,
+		Type:           "stdio",
+		AllowedOrigins: []string{"chrome-extension://abcdefghijklmnopabcdefghijklmnop/"},
+	}, "", "  ")
+	if err != nil {
+		t.Fatalf("MarshalIndent(manifest) error = %v", err)
+	}
+	if err := os.WriteFile(manifestPath, append(data, '\n'), 0o600); err != nil {
+		t.Fatalf("WriteFile(manifest) error = %v", err)
+	}
+
+	oldRegistryQuery := registryQuery
+	registryQuery = func(key string) (string, error) {
+		switch key {
+		case windowsRegistryTargets()[0].key:
+			return manifestPath, nil
+		case windowsRegistryTargets()[1].key:
+			return `C:\wrong\io.disbug.bridge.json`, nil
+		default:
+			return "", errors.New("not found")
+		}
+	}
+	t.Cleanup(func() {
+		registryQuery = oldRegistryQuery
+	})
+
+	diagnostics := ManifestDiagnostics(Options{
+		HomeDir:      home,
+		GOOS:         "windows",
+		BinaryPath:   `C:\tools\disbug.exe`,
+		LocalAppData: localAppData,
+	})
+	if len(diagnostics) != 1+len(windowsRegistryTargets()) {
+		t.Fatalf("diagnostics = %#v, want manifest plus registry entries", diagnostics)
+	}
+	if got, want := diagnostics[0].Status, "registered"; got != want {
+		t.Fatalf("manifest diagnostic status = %q, want %q", got, want)
+	}
+	if got, want := diagnostics[1].Status, "registered"; got != want {
+		t.Fatalf("chrome registry status = %q, want %q", got, want)
+	}
+	if got, want := diagnostics[2].Status, "outdated"; got != want {
+		t.Fatalf("chromium registry status = %q, want %q", got, want)
+	}
+	if got, want := diagnostics[3].Status, "missing"; got != want {
+		t.Fatalf("brave registry status = %q, want %q", got, want)
+	}
+}
+
+func TestParseRegistryDefaultValue(t *testing.T) {
+	value, err := parseRegistryDefaultValue(`
+HKEY_CURRENT_USER\Software\Google\Chrome\NativeMessagingHosts\io.disbug.bridge
+    (Default)    REG_SZ    C:\Users\test\AppData\Local\disbug\NativeMessagingHosts\io.disbug.bridge.json
+`)
+	if err != nil {
+		t.Fatalf("parseRegistryDefaultValue() error = %v", err)
+	}
+	want := `C:\Users\test\AppData\Local\disbug\NativeMessagingHosts\io.disbug.bridge.json`
+	if value != want {
+		t.Fatalf("parseRegistryDefaultValue() = %q, want %q", value, want)
 	}
 }
 

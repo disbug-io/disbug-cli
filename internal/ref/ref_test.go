@@ -42,6 +42,7 @@ func TestParsePin(t *testing.T) {
 	}{
 		{name: "normal pin", arg: "7392.2", want: PinRef{Session: 7392, Pin: 2}},
 		{name: "minimum positive pin", arg: "1.1", want: PinRef{Session: 1, Pin: 1}},
+		{name: "pin zero", arg: "1.0", want: PinRef{Session: 1, Pin: 0}},
 	}
 
 	for _, tt := range tests {
@@ -53,7 +54,7 @@ func TestParsePin(t *testing.T) {
 		})
 	}
 
-	for _, arg := range []string{"", "7392", "7392.", ".2", "0.1", "1.0", "-1.1", "1.-1", "7392.2.3", "7392.x", "a.b"} {
+	for _, arg := range []string{"", "7392", "7392.", ".2", "0.1", "-1.1", "1.-1", "7392.2.3", "7392.x", "a.b"} {
 		t.Run("rejects "+arg, func(t *testing.T) {
 			_, err := ParsePin(arg)
 

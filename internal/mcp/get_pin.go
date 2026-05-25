@@ -65,11 +65,14 @@ func registerGetPin(srv *sdkmcp.Server, deps *Deps) {
 			return nil, nil, errors.New(errfmt.Format(&errfmt.UsageError{Message: err.Error()}))
 		}
 
-		if err := deps.Client.RequireCapability(ctx, "pin_field_selection"); err != nil {
-			return nil, nil, errors.New(errfmt.Format(err))
-		}
 		if err := deps.Client.RequireCapability(ctx, "pin_by_number"); err != nil {
 			return nil, nil, errors.New(errfmt.Format(err))
+		}
+		fetch := ref.PinFetch{Pin: pinRef, Fields: fields}
+		if fetch.NeedsFieldSelection() {
+			if err := deps.Client.RequireCapability(ctx, "pin_field_selection"); err != nil {
+				return nil, nil, errors.New(errfmt.Format(err))
+			}
 		}
 
 		resp, err := deps.Client.GetPinByNumber(ctx, pinRef.Session, pinRef.Pin, fields)

@@ -24,6 +24,7 @@ type Options struct {
 	HomeDir      string
 	GOOS         string
 	BinaryPath   string
+	LocalAppData string
 	ExtensionIDs []string
 	SkipMCP      bool
 }
@@ -54,22 +55,10 @@ type HostManifest struct {
 
 // Install writes native messaging manifests and optionally registers MCP configs.
 func Install(opts Options) (Result, error) {
-	if opts.GOOS == "" {
-		opts.GOOS = runtime.GOOS
-	}
-	if opts.HomeDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return Result{}, err
-		}
-		opts.HomeDir = home
-	}
-	if opts.BinaryPath == "" {
-		exe, err := os.Executable()
-		if err != nil {
-			return Result{}, err
-		}
-		opts.BinaryPath = exe
+	var err error
+	opts, err = normalizeOptions(opts)
+	if err != nil {
+		return Result{}, err
 	}
 	origins, err := allowedOrigins(opts.ExtensionIDs)
 	if err != nil {
@@ -84,13 +73,16 @@ func Install(opts Options) (Result, error) {
 		AllowedOrigins: origins,
 	}
 
-	targets := manifestTargets(opts.GOOS, opts.HomeDir)
+	targets := manifestTargets(opts.GOOS, opts.HomeDir, opts.LocalAppData)
 	result := Result{MCP: map[string]string{}, Skills: map[string]string{}}
 	for _, target := range targets {
 		if err := writeManifest(target, manifest); err != nil {
 			return Result{}, err
 		}
 		result.Manifests = append(result.Manifests, target)
+	}
+	if err := registerNativeHost(opts.GOOS, opts.HomeDir, opts.LocalAppData, manifest.Path); err != nil {
+		return Result{}, err
 	}
 	if !opts.SkipMCP {
 		result.MCP = registerMCP(opts.HomeDir)
@@ -102,21 +94,9 @@ func Install(opts Options) (Result, error) {
 
 // ManifestDiagnostics checks whether known browser manifests point to the current CLI binary.
 func ManifestDiagnostics(opts Options) []ManifestDiagnostic {
-	if opts.GOOS == "" {
-		opts.GOOS = runtime.GOOS
-	}
-	if opts.HomeDir == "" {
-		if home, err := os.UserHomeDir(); err == nil {
-			opts.HomeDir = home
-		}
-	}
-	if opts.BinaryPath == "" {
-		if exe, err := os.Executable(); err == nil {
-			opts.BinaryPath = exe
-		}
-	}
+	opts, _ = normalizeOptions(opts)
 
-	targets := manifestTargets(opts.GOOS, opts.HomeDir)
+	targets := manifestTargets(opts.GOOS, opts.HomeDir, opts.LocalAppData)
 	diagnostics := make([]ManifestDiagnostic, 0, len(targets))
 	for _, target := range targets {
 		item := ManifestDiagnostic{Path: target, ExpectedPath: opts.BinaryPath}
@@ -140,7 +120,32 @@ func ManifestDiagnostics(opts Options) []ManifestDiagnostic {
 		}
 		diagnostics = append(diagnostics, item)
 	}
+	diagnostics = append(diagnostics, nativeHostRegistrationDiagnostics(opts.GOOS, opts.HomeDir, opts.LocalAppData)...)
 	return diagnostics
+}
+
+func normalizeOptions(opts Options) (Options, error) {
+	if opts.GOOS == "" {
+		opts.GOOS = runtime.GOOS
+	}
+	if opts.HomeDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return Options{}, err
+		}
+		opts.HomeDir = home
+	}
+	if opts.BinaryPath == "" {
+		exe, err := os.Executable()
+		if err != nil {
+			return Options{}, err
+		}
+		opts.BinaryPath = exe
+	}
+	if opts.GOOS == "windows" && opts.LocalAppData == "" {
+		opts.LocalAppData = os.Getenv("LOCALAPPDATA")
+	}
+	return opts, nil
 }
 
 func allowedOrigins(extensionIDs []string) ([]string, error) {
@@ -166,7 +171,7 @@ func allowedOrigins(extensionIDs []string) ([]string, error) {
 	return origins, nil
 }
 
-func manifestTargets(goos, home string) []string {
+func manifestTargets(goos, home, localAppData string) []string {
 	hostFile := hostName + ".json"
 	join := func(parts ...string) string {
 		return filepath.Join(append([]string{home}, append(parts, "NativeMessagingHosts", hostFile)...)...)
@@ -205,6 +210,29 @@ func manifestTargets(goos, home string) []string {
 			join(".config/vivaldi"),
 			join(".config/opera"),
 		}
+	case "windows":
+		if target, err := windowsManifestPath(localAppData); err == nil {
+			return []string{target}
+		}
+		return nil
+	default:
+		return nil
+	}
+}
+
+func registerNativeHost(goos, home, localAppData, binaryPath string) error {
+	switch goos {
+	case "windows":
+		return registerWindowsNativeHost(localAppData)
+	default:
+		return nil
+	}
+}
+
+func nativeHostRegistrationDiagnostics(goos, home, localAppData string) []ManifestDiagnostic {
+	switch goos {
+	case "windows":
+		return windowsNativeHostDiagnostics(localAppData)
 	default:
 		return nil
 	}
@@ -294,7 +322,109 @@ func SkillStatuses(home string) map[string]string {
 var (
 	lookPath       = exec.LookPath
 	commandContext = exec.CommandContext
+	registryQuery  = queryRegistryValue
+	registryWrite  = writeRegistryValue
 )
+
+type registryTarget struct {
+	label string
+	key   string
+}
+
+func registerWindowsNativeHost(localAppData string) error {
+	manifestPath, err := windowsManifestPath(localAppData)
+	if err != nil {
+		return err
+	}
+	for _, target := range windowsRegistryTargets() {
+		if err := registryWrite(target.key, manifestPath); err != nil {
+			return fmt.Errorf("register %s native messaging host: %w", target.label, err)
+		}
+	}
+	return nil
+}
+
+func windowsNativeHostDiagnostics(localAppData string) []ManifestDiagnostic {
+	manifestPath, err := windowsManifestPath(localAppData)
+	if err != nil {
+		return nil
+	}
+	diagnostics := make([]ManifestDiagnostic, 0, len(windowsRegistryTargets()))
+	for _, target := range windowsRegistryTargets() {
+		item := ManifestDiagnostic{
+			Path:         `HKCU\` + target.key,
+			ExpectedPath: manifestPath,
+		}
+		value, err := registryQuery(target.key)
+		if err != nil {
+			item.Status = "missing"
+		} else {
+			item.ActualPath = value
+			if strings.EqualFold(filepath.Clean(value), filepath.Clean(manifestPath)) {
+				item.Status = "registered"
+			} else {
+				item.Status = "outdated"
+			}
+		}
+		diagnostics = append(diagnostics, item)
+	}
+	return diagnostics
+}
+
+func windowsManifestPath(localAppData string) (string, error) {
+	if strings.TrimSpace(localAppData) == "" {
+		return "", errors.New("LOCALAPPDATA is not defined")
+	}
+	return filepath.Join(localAppData, "disbug", "NativeMessagingHosts", hostName+".json"), nil
+}
+
+func windowsRegistryTargets() []registryTarget {
+	return []registryTarget{
+		{label: "Chrome", key: `Software\Google\Chrome\NativeMessagingHosts\` + hostName},
+		{label: "Chromium", key: `Software\Chromium\NativeMessagingHosts\` + hostName},
+		{label: "Brave", key: `Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\` + hostName},
+		{label: "Edge", key: `Software\Microsoft\Edge\NativeMessagingHosts\` + hostName},
+	}
+}
+
+func queryRegistryValue(key string) (string, error) {
+	output, err := exec.Command("reg", "query", `HKCU\`+key, "/ve").CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(string(output)))
+	}
+	value, err := parseRegistryDefaultValue(string(output))
+	if err != nil {
+		return "", err
+	}
+	return value, nil
+}
+
+func writeRegistryValue(key, value string) error {
+	output, err := exec.Command("reg", "add", `HKCU\`+key, "/ve", "/t", "REG_SZ", "/d", value, "/f").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func parseRegistryDefaultValue(output string) (string, error) {
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.Contains(line, "REG_SZ") {
+			continue
+		}
+		idx := strings.Index(line, "REG_SZ")
+		if idx < 0 {
+			continue
+		}
+		value := strings.TrimSpace(line[idx+len("REG_SZ"):])
+		if value == "" {
+			continue
+		}
+		return strings.Trim(value, `"`), nil
+	}
+	return "", errors.New("registry value not found")
+}
 
 func registerClaudeCode() string {
 	claudePath, err := lookPath("claude")

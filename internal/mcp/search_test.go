@@ -290,56 +290,83 @@ func TestSearchPins_CapsLimit(t *testing.T) {
 	}
 }
 
-func TestSearchTools_MissingCapabilityReturnsToolError(t *testing.T) {
-	tests := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{name: "sessions", tool: "search_sessions", args: map[string]any{"query": "checkout"}},
-		{name: "pins", tool: "search_pins", args: map[string]any{"query": "checkout"}},
+func TestSearchSessions_MissingCapabilityFallsBackToListSessions(t *testing.T) {
+	var listSessionsCalled atomic.Bool
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/me/":
+			_, _ = io.WriteString(w, `{
+				"agent_name":"claude-test",
+				"team":"Disbug",
+				"team_slug":"disbug",
+				"api_version":"2026-05-01",
+				"capabilities":[]
+			}`)
+		case "/api/sessions/":
+			listSessionsCalled.Store(true)
+			_, _ = io.WriteString(w, `{
+				"results": [{"id": 1, "url": "https://example.com", "first_pin_feedback": "matches query"}],
+				"count": 1
+			}`)
+		case "/api/search/":
+			t.Fatalf("search endpoint called despite missing capability")
+		default:
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+	}))
+	t.Cleanup(backend.Close)
+
+	cli := client.New(backend.URL, "dba_test", "disbug-cli-test", nil, backend.Client(), nil)
+	srv := newServer(&Deps{Client: cli})
+
+	res, err := callTool(t, srv, "search_sessions", map[string]any{"query": "matches"})
+	if err != nil {
+		t.Fatalf("CallTool(search_sessions) error = %v, want nil", err)
 	}
+	if res.IsError {
+		t.Fatalf("search_sessions IsError = true, want false (fallback should succeed): %v", firstTextContent(t, res))
+	}
+	if !listSessionsCalled.Load() {
+		t.Fatal("list_sessions endpoint was not called for fallback")
+	}
+	text := firstTextContent(t, res)
+	if !strings.Contains(text, `"id":1`) {
+		t.Fatalf("search_sessions content = %q, want session id", text)
+	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var searchEndpointCalled atomic.Bool
-			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				switch r.URL.Path {
-				case "/api/me/":
-					_, _ = io.WriteString(w, `{
-						"agent_name":"claude-test",
-						"team":"Disbug",
-						"team_slug":"disbug",
-						"api_version":"2026-05-01",
-						"capabilities":[]
-					}`)
-				case "/api/search/":
-					searchEndpointCalled.Store(true)
-					t.Fatalf("search endpoint called despite missing capability")
-				default:
-					t.Fatalf("unexpected request path: %s", r.URL.Path)
-				}
-			}))
-			t.Cleanup(backend.Close)
+func TestSearchPins_MissingCapabilityReturnsToolError(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/me/":
+			_, _ = io.WriteString(w, `{
+				"agent_name":"claude-test",
+				"team":"Disbug",
+				"team_slug":"disbug",
+				"api_version":"2026-05-01",
+				"capabilities":[]
+			}`)
+		default:
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+	}))
+	t.Cleanup(backend.Close)
 
-			cli := client.New(backend.URL, "dba_test", "disbug-cli-test", nil, backend.Client(), nil)
-			srv := newServer(&Deps{Client: cli})
+	cli := client.New(backend.URL, "dba_test", "disbug-cli-test", nil, backend.Client(), nil)
+	srv := newServer(&Deps{Client: cli})
 
-			res, err := callTool(t, srv, tt.tool, tt.args)
-			if err != nil {
-				t.Fatalf("CallTool(%s) error = %v, want nil tool error result", tt.tool, err)
-			}
-			if !res.IsError {
-				t.Fatalf("%s IsError = false, want true", tt.tool)
-			}
-			if res.StructuredContent != nil {
-				t.Fatalf("%s StructuredContent = %#v, want nil on tool error", tt.tool, res.StructuredContent)
-			}
-			if searchEndpointCalled.Load() {
-				t.Fatal("search endpoint called despite missing capability")
-			}
-		})
+	res, err := callTool(t, srv, "search_pins", map[string]any{"query": "checkout"})
+	if err != nil {
+		t.Fatalf("CallTool(search_pins) error = %v, want nil tool error result", err)
+	}
+	if !res.IsError {
+		t.Fatalf("search_pins IsError = false, want true")
+	}
+	text := firstTextContent(t, res)
+	if !strings.Contains(text, "Pin search requires Disbug API capability \"search\"") {
+		t.Fatalf("search_pins error = %q, want specific fallback error", text)
 	}
 }
 

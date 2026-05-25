@@ -225,7 +225,7 @@ func TestSearchMissingCapabilityReturnsUserFacingErrorAndDoesNotCallSearchEndpoi
 	t.Cleanup(srv.Close)
 	setupClient(t, srv)
 
-	stdout, stderr, err := executeSearch(t, "search", "checkout")
+	stdout, stderr, err := executeSearch(t, "search", "checkout", "--scope", "pins")
 
 	if err == nil {
 		t.Fatal("Execute() error = nil, want missing capability error")

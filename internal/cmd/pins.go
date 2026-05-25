@@ -43,11 +43,13 @@ func (c *PinsCmd) Run(ctx context.Context, b bindings) error {
 		return err
 	}
 
-	if err := cli.RequireCapability(ctx, "pin_field_selection"); err != nil {
-		return err
-	}
 	if err := cli.RequireCapability(ctx, "pin_by_number"); err != nil {
 		return err
+	}
+	if ref.AnyNeedsFieldSelection(unique) {
+		if err := cli.RequireCapability(ctx, "pin_field_selection"); err != nil {
+			return err
+		}
 	}
 
 	res := cli.GetPinsBulk(ctx, unique)

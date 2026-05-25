@@ -48,14 +48,15 @@ func TestExecuteUnknownFlagReturnsUsageError(t *testing.T) {
 	assert.Empty(t, stdout.String())
 }
 
-func TestExecuteCompletionBashPlaceholder(t *testing.T) {
+func TestExecuteCompletionBash(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
 	err := Execute(context.Background(), []string{"completion", "bash"}, nil, &stdout, &stderr)
 
 	require.NoError(t, err)
-	assert.Equal(t, "# disbug bash completion (placeholder; implemented in Phase 6)\n", stdout.String())
+	assert.Contains(t, stdout.String(), "_disbug_completion()")
+	assert.Contains(t, stdout.String(), "opts=\"sessions session pin pins search login logout whoami doctor mcp native-host setup-local local-sessions completion version\"")
 	assert.Empty(t, stderr.String())
 }
 

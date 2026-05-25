@@ -69,8 +69,35 @@ func registerSearchSessions(srv *sdkmcp.Server, deps *Deps) {
 			return nil, nil, errors.New(errfmt.Format(err))
 		}
 
-		if err := deps.Client.RequireCapability(ctx, "search"); err != nil {
+		me, err := deps.Client.MeCached(ctx)
+		if err != nil {
 			return nil, nil, errors.New(errfmt.Format(err))
+		}
+
+		if !me.HasCapability("search") {
+			if scope == "pins" {
+				return nil, nil, errors.New("Pin search requires Disbug API capability \"search\"; your team's instance does not advertise it. Local fallback is currently only available for scope \"sessions\".")
+			}
+			// Local fallback for sessions
+			resp, err := deps.Client.ListSessions(ctx, &client.ListSessionsParams{Limit: 100})
+			if err != nil {
+				return nil, nil, errors.New(errfmt.Format(err))
+			}
+			query := strings.ToLower(strings.TrimSpace(in.Query))
+			var filtered []client.SessionSummary
+			for _, s := range resp.Results {
+				if s.Matches(query) {
+					filtered = append(filtered, s)
+				}
+			}
+			if len(filtered) > limit {
+				filtered = filtered[:limit]
+			}
+			result := resultFrom(&client.SearchSessionsResponse{
+				Results: filtered,
+				Total:   len(filtered),
+			})
+			return jsonResult(result), result, nil
 		}
 
 		resp, err := deps.Client.SearchSessions(ctx, &client.SearchParams{

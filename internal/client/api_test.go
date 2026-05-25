@@ -65,10 +65,10 @@ func TestListSessions(t *testing.T) {
 	if got, want := len(resp.Results), 1; got != want {
 		t.Fatalf("len(Results) = %d, want %d", got, want)
 	}
-	if got, want := resp.Results[0].Project.Slug, "web"; got != want {
+	if got, want := resp.Results[0].Project.(map[string]any)["slug"].(string), "web"; got != want {
 		t.Fatalf("Project.Slug = %q, want %q", got, want)
 	}
-	if got, want := resp.Results[0].Reporter.Email, "r@example.test"; got != want {
+	if got, want := resp.Results[0].Reporter.(map[string]any)["email"].(string), "r@example.test"; got != want {
 		t.Fatalf("Reporter.Email = %q, want %q", got, want)
 	}
 	if got, want := resp.Results[0].FirstPinFeedback, "broken button"; got != want {
@@ -188,7 +188,7 @@ func TestSearchSessionsPinsScopeMapsPinHitsToSessions(t *testing.T) {
 	if got, want := resp.Results[0].Status, "open"; got != want {
 		t.Fatalf("Status = %q, want %q", got, want)
 	}
-	if resp.Results[0].Project == nil || resp.Results[0].Project.Slug != "web" {
+	if resp.Results[0].Project == nil || resp.Results[0].Project.(map[string]any)["slug"] != "web" {
 		t.Fatalf("Project = %#v, want web project", resp.Results[0].Project)
 	}
 	if got, want := resp.Results[0].FirstPinFeedback, "checkout broken"; got != want {
@@ -325,7 +325,7 @@ func TestGetSession(t *testing.T) {
 	if session.Project == nil {
 		t.Fatal("Project = nil, want project")
 	}
-	if got, want := session.Project.Name, "Website"; got != want {
+	if got, want := session.Project.(map[string]any)["name"].(string), "Website"; got != want {
 		t.Fatalf("Project.Name = %q, want %q", got, want)
 	}
 	if got, want := len(session.Pins), 1; got != want {

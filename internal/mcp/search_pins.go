@@ -58,7 +58,7 @@ func registerSearchPins(srv *sdkmcp.Server, deps *Deps) {
 		}
 
 		if err := deps.Client.RequireCapability(ctx, "search"); err != nil {
-			return nil, nil, errors.New(errfmt.Format(err))
+			return nil, nil, errors.New("Pin search requires Disbug API capability \"search\"; your team's instance does not advertise it. Local fallback is currently only available for scope \"sessions\".")
 		}
 
 		resp, err := deps.Client.SearchPins(ctx, &client.SearchParams{

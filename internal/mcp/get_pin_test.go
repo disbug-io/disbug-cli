@@ -106,7 +106,10 @@ func TestGetPin_MissingCapabilityReturnsToolError(t *testing.T) {
 	cli := client.New(backend.URL, "dba_test", "disbug-cli-test", nil, backend.Client(), nil)
 	srv := newServer(&Deps{Client: cli})
 
-	res, err := callTool(t, srv, "get_pin", map[string]any{"pin": "7392.2"})
+	res, err := callTool(t, srv, "get_pin", map[string]any{
+		"pin":    "7392.2",
+		"fields": []string{"console"},
+	})
 	if err != nil {
 		t.Fatalf("CallTool(get_pin) error = %v, want nil tool error result", err)
 	}

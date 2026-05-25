@@ -20,25 +20,32 @@ func TestSessionsBasicList(t *testing.T) {
 		if got, want := r.URL.Path, "/api/sessions/"; got != want {
 			t.Fatalf("path = %q, want %q", got, want)
 		}
-		if got, want := r.URL.Query().Get("status"), "open"; got != want {
-			t.Fatalf("status query = %q, want %q", got, want)
+		// filters are handled locally
+		if got := r.URL.Query().Get("status"); got != "" {
+			t.Fatalf("status query = %q, want empty", got)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{
-			"results":[{
-				"id":123,
-				"project":{"slug":"web","name":"Website"},
-				"url":"https://example.test/page",
-				"status":"open",
-				"pin_count":2,
-				"first_pin_feedback":"broken button",
-				"reporter":{"email":"r@example.test","display_name":"Reporter"},
-				"updated_at":"2026-05-01T12:00:00Z",
-				"free_tier_locked":false
-			}],
+			"results":[
+				{
+					"id":123,
+					"project":{"slug":"web","name":"Website"},
+					"url":"https://example.test/page",
+					"status":"open",
+					"pin_count":2,
+					"first_pin_feedback":"broken button",
+					"reporter":{"email":"r@example.test","display_name":"Reporter"},
+					"updated_at":"2026-05-01T12:00:00Z",
+					"free_tier_locked":false
+				},
+				{
+					"id":124,
+					"status":"resolved"
+				}
+			],
 			"next_cursor":null,
-			"count":1,
+			"count":2,
 			"free_tier_truncated":false
 		}`)
 	}))
@@ -55,8 +62,12 @@ func TestSessionsBasicList(t *testing.T) {
 	if got := stderr; got != "" {
 		t.Fatalf("stderr = %q, want empty", got)
 	}
-	if got := stdout; !bytes.Contains([]byte(got), []byte(`"id":123`)) {
-		t.Fatalf("stdout = %q, want session id", got)
+	// Verify only one result (id:123) is in output due to local filtering
+	if !bytes.Contains([]byte(stdout), []byte(`"id":123`)) {
+		t.Fatalf("stdout = %q, want session id 123", stdout)
+	}
+	if bytes.Contains([]byte(stdout), []byte(`"id":124`)) {
+		t.Fatalf("stdout = %q, should not contain id 124 (resolved)", stdout)
 	}
 	if got := stdout; !bytes.Contains([]byte(got), []byte(`"status":"open"`)) {
 		t.Fatalf("stdout = %q, want session status", got)
@@ -66,10 +77,12 @@ func TestSessionsBasicList(t *testing.T) {
 func TestSessionsIncludesQueryParams(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
-		if got, want := query.Get("project"), "web"; got != want {
-			t.Fatalf("project query = %q, want %q", got, want)
+		// project is handled locally
+		if got := query.Get("project"); got != "" {
+			t.Fatalf("project query = %q, want empty", got)
 		}
-		if got, want := query.Get("limit"), "25"; got != want {
+		// limit is overridden to 100 for local filtering
+		if got, want := query.Get("limit"), "100"; got != want {
 			t.Fatalf("limit query = %q, want %q", got, want)
 		}
 		if got, want := query.Get("cursor"), "next-1"; got != want {
