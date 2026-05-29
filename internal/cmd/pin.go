@@ -44,5 +44,10 @@ func (c *PinCmd) Run(ctx context.Context, b bindings) error {
 		return err
 	}
 
-	return outfmt.WriteJSON(b.Stdout, resp, b.Flags.Pretty)
+	resolved, err := cli.ResolveReplay(ctx, resp, pinRef.Session, pinRef.Pin)
+	if err != nil {
+		return err
+	}
+
+	return outfmt.WriteJSON(b.Stdout, resolved, b.Flags.Pretty)
 }

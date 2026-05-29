@@ -80,7 +80,12 @@ func registerGetPin(srv *sdkmcp.Server, deps *Deps) {
 			return nil, nil, errors.New("disbug API returned no pin")
 		}
 
-		result := resultFrom(resp)
+		resolved, err := deps.Client.ResolveReplay(ctx, resp, pinRef.Session, pinRef.Pin)
+		if err != nil {
+			return nil, nil, errors.New(errfmt.Format(err))
+		}
+
+		result := resultFrom(resolved)
 		return jsonResult(result), result, nil
 	})
 }

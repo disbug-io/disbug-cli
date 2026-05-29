@@ -224,6 +224,42 @@ type PinFull struct {
 	Events         []map[string]any `json:"events"`
 }
 
+// PinFullResolved is a PinFull with asset URLs resolved to local file paths.
+type PinFullResolved struct {
+	PinLite
+	Screenshot     *Asset           `json:"screenshot"`
+	SessionReplay  *ReplayFile      `json:"session_replay"`
+	VoiceNote      *Asset           `json:"voice_note"`
+	VideoRecording *Asset           `json:"video_recording"`
+	Console        []map[string]any `json:"console"`
+	Network        []map[string]any `json:"network"`
+	Events         []map[string]any `json:"events"`
+}
+
+// ResolveReplay downloads the replay asset to a local cache file and returns
+// a PinFullResolved with the replay field replaced by a local file path.
+func (c *Client) ResolveReplay(ctx context.Context, pin *PinFull, sessionID, pinNumber int64) (*PinFullResolved, error) {
+	resolved := &PinFullResolved{
+		PinLite:        pin.PinLite,
+		Screenshot:     pin.Screenshot,
+		VoiceNote:      pin.VoiceNote,
+		VideoRecording: pin.VideoRecording,
+		Console:        pin.Console,
+		Network:        pin.Network,
+		Events:         pin.Events,
+	}
+
+	if pin.SessionReplay != nil && pin.SessionReplay.URL != "" {
+		replayFile, err := DownloadReplay(ctx, pin.SessionReplay, sessionID, pinNumber)
+		if err != nil {
+			return nil, err
+		}
+		resolved.SessionReplay = replayFile
+	}
+
+	return resolved, nil
+}
+
 // GetPinByNumber calls GET /api/sessions/{id}/pins/by-number/{n}/.
 func (c *Client) GetPinByNumber(
 	ctx context.Context,
