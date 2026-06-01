@@ -399,10 +399,10 @@ func cloudWatchEvent(
 		status = detail.Status
 	}
 	project := ""
-	if summary.Project != nil {
-		project = summary.Project.Slug
-	} else if detail.Project != nil {
-		project = detail.Project.Slug
+	if slug := projectSlug(summary.Project); slug != "" {
+		project = slug
+	} else if slug := projectSlug(detail.Project); slug != "" {
+		project = slug
 	}
 	sourceURL := summary.URL
 	if sourceURL == "" {
@@ -474,6 +474,23 @@ func intFromAny(value any) int {
 		return parsed
 	default:
 		return 0
+	}
+}
+
+func projectSlug(value any) string {
+	switch typed := value.(type) {
+	case map[string]any:
+		slug, _ := typed["slug"].(string)
+		return slug
+	case client.Project:
+		return typed.Slug
+	case *client.Project:
+		if typed == nil {
+			return ""
+		}
+		return typed.Slug
+	default:
+		return ""
 	}
 }
 

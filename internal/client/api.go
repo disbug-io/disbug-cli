@@ -34,6 +34,7 @@ type SessionSummary struct {
 	FirstPinFeedback string `json:"first_pin_feedback"`
 	Reporter         any    `json:"reporter"` // Can be int (ID) or Reporter struct
 	ReporterName     string `json:"reporter_name,omitempty"`
+	CreatedAt        string `json:"created_at,omitempty"`
 	UpdatedAt        string `json:"updated_at"`
 	FreeTierLocked   bool   `json:"free_tier_locked"`
 }

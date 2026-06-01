@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"context"
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/disbug-io/disbug-cli/internal/client"
@@ -51,12 +54,10 @@ func (c *SessionsCmd) Run(ctx context.Context, b bindings) error {
 	// Fetch without status and project filters to avoid backend 500 errors.
 	// We use a high limit to allow effective local filtering.
 	resp, err := cli.ListSessions(ctx, &client.ListSessionsParams{
-		Limit:  100,
-		Cursor: cursor,
 		Status:         c.Status,
 		Project:        c.Project,
-		Limit:          c.Limit,
-		Cursor:         c.Cursor,
+		Limit:          100,
+		Cursor:         cursor,
 		CreatedAtAfter: createdAtAfter,
 	})
 	if err != nil {
