@@ -140,6 +140,7 @@ func TestInstallRegistersDetectedMCPConfigsAndSkills(t *testing.T) {
 	mustMkdir(t, filepath.Join(home, ".codex"))
 	mustMkdir(t, filepath.Join(home, ".cursor"))
 	mustMkdir(t, filepath.Join(home, ".claude"))
+	mustMkdir(t, filepath.Join(home, ".gemini"))
 	mustMkdir(t, filepath.Join(home, "Library/Application Support/Claude"))
 
 	result, err := Install(Options{
@@ -156,6 +157,7 @@ func TestInstallRegistersDetectedMCPConfigsAndSkills(t *testing.T) {
 		"cursor":        "registered",
 		"claudeDesktop": "registered",
 		"claudeCode":    "not detected",
+		"gemini":        "registered",
 	} {
 		if got := result.MCP[agent]; got != want {
 			t.Fatalf("MCP[%s] = %q, want %q; all=%#v", agent, got, want, result.MCP)
@@ -164,6 +166,7 @@ func TestInstallRegistersDetectedMCPConfigsAndSkills(t *testing.T) {
 	for agent, want := range map[string]string{
 		"codex":  "registered",
 		"claude": "registered",
+		"gemini": "registered",
 	} {
 		if got := result.Skills[agent]; got != want {
 			t.Fatalf("Skills[%s] = %q, want %q; all=%#v", agent, got, want, result.Skills)
@@ -173,8 +176,10 @@ func TestInstallRegistersDetectedMCPConfigsAndSkills(t *testing.T) {
 	assertFileContains(t, filepath.Join(home, ".codex", "config.toml"), "[mcp_servers.disbug]")
 	assertFileContains(t, filepath.Join(home, ".cursor", "mcp.json"), `"disbug"`)
 	assertFileContains(t, filepath.Join(home, "Library/Application Support/Claude/claude_desktop_config.json"), `"disbug"`)
+	assertFileContains(t, filepath.Join(home, ".gemini/config/mcp_config.json"), `"disbug"`)
 	assertFileContains(t, filepath.Join(home, ".codex", "skills", "disbug-local", "SKILL.md"), "get_session")
 	assertFileContains(t, filepath.Join(home, ".claude", "skills", "disbug-local", "SKILL.md"), "Disbug Local Report")
+	assertFileContains(t, filepath.Join(home, ".gemini", "skills", "disbug-local", "SKILL.md"), "Disbug Local Report")
 
 	status := MCPStatuses(home)
 	if got, want := status["codex"], "registered"; got != want {

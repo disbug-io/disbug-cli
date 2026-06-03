@@ -85,7 +85,7 @@ func Install(opts Options) (Result, error) {
 		return Result{}, err
 	}
 	if !opts.SkipMCP {
-		result.MCP = registerMCP(opts.HomeDir)
+		result.MCP = registerMCP(opts.HomeDir, opts.BinaryPath)
 		result.Skills = installAgentSkills(opts.HomeDir)
 	}
 	sort.Strings(result.Manifests)
@@ -253,7 +253,7 @@ func writeManifest(target string, manifest HostManifest) error {
 	return os.WriteFile(target, data, 0o600) //nolint:gosec // target is a user-level native host manifest path.
 }
 
-func registerMCP(home string) map[string]string {
+func registerMCP(home, binaryPath string) map[string]string {
 	status := map[string]string{}
 	if home == "" {
 		return status
@@ -267,7 +267,7 @@ func registerMCP(home string) map[string]string {
 
 	cursorPath, cursorDetected := cursorConfigPath(home)
 	if cursorDetected {
-		if err := mergeMCPJSON(cursorPath); err != nil {
+		if err := mergeMCPJSON(cursorPath, binaryPath); err != nil {
 			status["cursor"] = "outdated"
 		} else {
 			status["cursor"] = "registered"
@@ -277,10 +277,24 @@ func registerMCP(home string) map[string]string {
 	}
 
 	claudeDesktopPath := filepath.Join(home, "Library/Application Support/Claude/claude_desktop_config.json")
-	if err := mergeMCPJSON(claudeDesktopPath); err != nil {
+	if err := mergeMCPJSON(claudeDesktopPath, binaryPath); err != nil {
 		status["claudeDesktop"] = "not detected"
 	} else {
 		status["claudeDesktop"] = "registered"
+	}
+
+	geminiUpdated := false
+	if err := mergeMCPJSON(filepath.Join(home, ".gemini/settings.json"), binaryPath); err == nil {
+		geminiUpdated = true
+	}
+	if err := mergeMCPJSON(filepath.Join(home, ".gemini/config/mcp_config.json"), binaryPath); err == nil {
+		geminiUpdated = true
+	}
+
+	if geminiUpdated {
+		status["gemini"] = "registered"
+	} else {
+		status["gemini"] = "not detected"
 	}
 	return status
 }
@@ -299,6 +313,12 @@ func MCPStatuses(home string) map[string]string {
 		status["cursor"] = "not detected"
 	}
 	status["claudeDesktop"] = mcpJSONStatus(filepath.Join(home, "Library/Application Support/Claude/claude_desktop_config.json"))
+	
+	geminiStatus := mcpJSONStatus(filepath.Join(home, ".gemini/settings.json"))
+	if geminiStatus == "not detected" {
+		geminiStatus = mcpJSONStatus(filepath.Join(home, ".gemini/config/mcp_config.json"))
+	}
+	status["gemini"] = geminiStatus
 	return status
 }
 
@@ -511,7 +531,7 @@ func mcpJSONStatus(path string) string {
 	return "outdated"
 }
 
-func mergeMCPJSON(path string) error {
+func mergeMCPJSON(path, binaryPath string) error {
 	if _, err := os.Stat(filepath.Dir(path)); err != nil {
 		return err
 	}
@@ -530,7 +550,7 @@ func mergeMCPJSON(path string) error {
 		config["mcpServers"] = servers
 	}
 	servers["disbug"] = map[string]any{
-		"command": "disbug",
+		"command": binaryPath,
 		"args":    []string{"mcp"},
 	}
 	encoded, err := json.MarshalIndent(config, "", "  ")
@@ -565,6 +585,7 @@ func skillTargets(home string) map[string]string {
 	return map[string]string{
 		"codex":  filepath.Join(home, ".codex", "skills", "disbug-local", "SKILL.md"),
 		"claude": filepath.Join(home, ".claude", "skills", "disbug-local", "SKILL.md"),
+		"gemini": filepath.Join(home, ".gemini", "skills", "disbug-local", "SKILL.md"),
 	}
 }
 

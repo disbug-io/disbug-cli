@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "disbug": {
+      "command": "disbug",
+      "args": [
+        "mcp"
+      ]
+    }
+  }
+}

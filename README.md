@@ -2,7 +2,7 @@
 
 Disbug CLI and MCP server for AI coding agents.
 
-A single Go binary that reads bug-report sessions from your team's Disbug instance. Use it from your terminal, or hook it into Claude Desktop / Claude Code / Codex / OpenClaw / Hermes / Cursor as an MCP server.
+A single Go binary that reads bug-report sessions from your team's Disbug instance. Use it from your terminal, or hook it into Gemini / Claude Desktop / Claude Code / Codex / OpenClaw / Hermes / Cursor as an MCP server.
 
 ## Install
 
@@ -39,6 +39,7 @@ Disbug exposes read-only MCP tools for cloud and local reports: `whoami`, `list_
 
 Agent setup recipes:
 
+- [Gemini](docs/integrations/gemini.md)
 - [Claude Desktop](docs/integrations/claude-desktop.md)
 - [Claude Code](docs/integrations/claude-code.md)
 - [Codex](docs/integrations/codex.md)
@@ -54,7 +55,7 @@ The Chrome/Brave extension can copy reports directly into a local store that `di
 disbug setup-local --extension-id <chrome-extension-id>
 ```
 
-The command installs Chrome/Brave/Chromium native messaging manifests for `io.disbug.bridge`, registers Disbug MCP where supported, and installs the `disbug-local` agent skill for Codex/Claude skill folders when present. The extension shows the exact command with its runtime extension id after the first markdown copy fallback.
+The command installs Chrome/Brave/Chromium native messaging manifests for `io.disbug.bridge`, registers Disbug MCP where supported, and installs the `disbug-local` agent skill for Codex/Claude/Gemini skill folders when present. The extension shows the exact command with its runtime extension id after the first markdown copy fallback.
 
 Manage local reports:
 
