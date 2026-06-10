@@ -13,7 +13,9 @@ import (
 
 // GetPinInput is the input for the get_pin MCP tool.
 type GetPinInput struct {
-	Pin    string   `json:"pin" jsonschema:"pin reference e.g. 7392.2"`
+	Target string   `json:"target,omitempty" jsonschema:"Disbug report URL with ?pin=<number>"`
+	URL    string   `json:"url,omitempty" jsonschema:"Disbug report URL with ?pin=<number>"`
+	Pin    string   `json:"pin,omitempty" jsonschema:"Disbug report URL with ?pin=<number>, or local_<id>.<number> for source=local"`
 	Source string   `json:"source,omitempty" jsonschema:"Source: auto, cloud, or local"`
 	Fields []string `json:"fields,omitempty" jsonschema:"array of: screenshot console network events replay voice_note video all"`
 }
@@ -21,13 +23,20 @@ type GetPinInput struct {
 func registerGetPin(srv *sdkmcp.Server, deps *Deps) {
 	sdkmcp.AddTool[GetPinInput, Result](srv, &sdkmcp.Tool{
 		Name:        "get_pin",
-		Description: "Get a Disbug pin by session.pin reference from cloud or local source.",
+		Description: "Get a Disbug pin by report URL from cloud, or by local_<id>.<number> from local source.",
 	}, func(
 		ctx context.Context,
 		_ *sdkmcp.CallToolRequest,
 		in GetPinInput,
 	) (*sdkmcp.CallToolResult, Result, error) {
-		source, err := routeSessionSource(in.Source, strings.TrimSpace(in.Pin), deps)
+		target := strings.TrimSpace(in.Target)
+		if target == "" {
+			target = strings.TrimSpace(in.URL)
+		}
+		if target == "" {
+			target = strings.TrimSpace(in.Pin)
+		}
+		source, err := routeSessionSource(in.Source, target, deps)
 		if err != nil {
 			return nil, nil, toolErr(err)
 		}
@@ -36,7 +45,7 @@ func registerGetPin(srv *sdkmcp.Server, deps *Deps) {
 			if err != nil {
 				return nil, nil, errors.New(err.Error())
 			}
-			sessionID, number, err := parseLocalPinRef(in.Pin)
+			sessionID, number, err := parseLocalPinRef(target)
 			if err != nil {
 				return nil, nil, toolErr(err)
 			}
@@ -51,7 +60,7 @@ func registerGetPin(srv *sdkmcp.Server, deps *Deps) {
 			return nil, nil, toolErr(err)
 		}
 
-		pinRef, err := ref.ParsePin(in.Pin)
+		pinRef, err := ref.ParsePin(target)
 		if err != nil {
 			return nil, nil, errors.New(errfmt.Format(&errfmt.UsageError{Message: err.Error()}))
 		}
@@ -68,7 +77,7 @@ func registerGetPin(srv *sdkmcp.Server, deps *Deps) {
 		if err := deps.Client.RequireCapability(ctx, "pin_field_selection"); err != nil {
 			return nil, nil, errors.New(errfmt.Format(err))
 		}
-		if err := deps.Client.RequireCapability(ctx, "pin_by_number"); err != nil {
+		if err := deps.Client.RequireCapability(ctx, "scoped_pin_lookup"); err != nil {
 			return nil, nil, errors.New(errfmt.Format(err))
 		}
 
@@ -80,7 +89,7 @@ func registerGetPin(srv *sdkmcp.Server, deps *Deps) {
 			return nil, nil, errors.New("disbug API returned no pin")
 		}
 
-		resolved, err := deps.Client.ResolveReplay(ctx, resp, pinRef.Session, pinRef.Pin)
+		resolved, err := deps.Client.ResolveReplay(ctx, resp, pinRef.Session.SessionNumber, pinRef.Pin)
 		if err != nil {
 			return nil, nil, errors.New(errfmt.Format(err))
 		}

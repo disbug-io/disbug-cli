@@ -27,7 +27,7 @@ func TestDoctor_Healthy(t *testing.T) {
 			"team":"Disbug",
 			"team_slug":"disbug",
 			"api_version":"2026-05-01",
-			"capabilities":["search","pin_field_selection","pin_by_number"]
+			"capabilities":["search","pin_field_selection","scoped_session_lookup","scoped_pin_lookup"]
 		}`)
 	}))
 	t.Cleanup(srv.Close)
@@ -87,7 +87,8 @@ func TestDoctor_MissingCapability(t *testing.T) {
 	for _, want := range []string{
 		"capabilities MISSING",
 		"pin_field_selection",
-		"pin_by_number",
+		"scoped_session_lookup",
+		"scoped_pin_lookup",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("stdout = %q, want %q", stdout, want)

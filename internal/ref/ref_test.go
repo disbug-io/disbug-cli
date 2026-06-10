@@ -7,13 +7,14 @@ import (
 )
 
 func TestParseSession(t *testing.T) {
+	reportURL := "https://staging.disbug.us/abb/projects/2/sessions/5/"
 	tests := []struct {
 		name string
 		arg  string
 		want SessionRef
 	}{
-		{name: "normal session", arg: "7392", want: SessionRef{ID: 7392}},
-		{name: "minimum positive session", arg: "1", want: SessionRef{ID: 1}},
+		{name: "report url", arg: reportURL, want: SessionRef{TeamSlug: "abb", ProjectID: 2, SessionNumber: 5}},
+		{name: "report url with pin ignored", arg: reportURL + "?pin=1", want: SessionRef{TeamSlug: "abb", ProjectID: 2, SessionNumber: 5}},
 	}
 
 	for _, tt := range tests {
@@ -25,7 +26,7 @@ func TestParseSession(t *testing.T) {
 		})
 	}
 
-	for _, arg := range []string{"", "abc", "-3", "0", "7392.2", "7392 "} {
+	for _, arg := range []string{"", "abc", "-3", "0", "7392.2", "7392 ", "https://example.com/abb/sessions/5/"} {
 		t.Run("rejects "+arg, func(t *testing.T) {
 			_, err := ParseSession(arg)
 
@@ -35,13 +36,15 @@ func TestParseSession(t *testing.T) {
 }
 
 func TestParsePin(t *testing.T) {
+	reportURL := "https://staging.disbug.us/abb/projects/2/sessions/5/"
+	session := SessionRef{TeamSlug: "abb", ProjectID: 2, SessionNumber: 5}
 	tests := []struct {
 		name string
 		arg  string
 		want PinRef
 	}{
-		{name: "normal pin", arg: "7392.2", want: PinRef{Session: 7392, Pin: 2}},
-		{name: "minimum positive pin", arg: "1.1", want: PinRef{Session: 1, Pin: 1}},
+		{name: "pin query", arg: reportURL + "?pin=2", want: PinRef{Session: session, Pin: 2}},
+		{name: "minimum positive pin query", arg: reportURL + "?pin=1", want: PinRef{Session: session, Pin: 1}},
 	}
 
 	for _, tt := range tests {
@@ -53,7 +56,7 @@ func TestParsePin(t *testing.T) {
 		})
 	}
 
-	for _, arg := range []string{"", "7392", "7392.", ".2", "0.1", "1.0", "-1.1", "1.-1", "7392.2.3", "7392.x", "a.b"} {
+	for _, arg := range []string{"", "7392", "7392.2", reportURL, reportURL + "?pin=0", reportURL + "?pin=x"} {
 		t.Run("rejects "+arg, func(t *testing.T) {
 			_, err := ParsePin(arg)
 
@@ -63,28 +66,31 @@ func TestParsePin(t *testing.T) {
 }
 
 func TestParsePinFetch(t *testing.T) {
+	reportURL := "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2"
+	pin := PinRef{Session: SessionRef{TeamSlug: "abb", ProjectID: 2, SessionNumber: 5}, Pin: 2}
+
 	t.Run("plain pin defaults to all", func(t *testing.T) {
-		got, err := ParsePinFetch("7392.2", nil)
+		got, err := ParsePinFetch(reportURL, nil)
 
 		require.NoError(t, err)
-		require.Equal(t, PinFetch{Pin: PinRef{Session: 7392, Pin: 2}, Fields: []string{"all"}}, got)
+		require.Equal(t, PinFetch{Pin: pin, Fields: []string{"all"}}, got)
 	})
 
 	t.Run("default fields apply without suffix", func(t *testing.T) {
-		got, err := ParsePinFetch("7392.2", []string{"console", "screenshot"})
+		got, err := ParsePinFetch(reportURL, []string{"console", "screenshot"})
 
 		require.NoError(t, err)
-		require.Equal(t, PinFetch{Pin: PinRef{Session: 7392, Pin: 2}, Fields: []string{"screenshot", "console"}}, got)
+		require.Equal(t, PinFetch{Pin: pin, Fields: []string{"screenshot", "console"}}, got)
 	})
 
-	t.Run("suffix overrides default fields", func(t *testing.T) {
-		got, err := ParsePinFetch("7392.3:network,events", []string{"console"})
+	t.Run("url fields override default fields", func(t *testing.T) {
+		got, err := ParsePinFetch(reportURL+"&fields=network,events", []string{"console"})
 
 		require.NoError(t, err)
-		require.Equal(t, PinFetch{Pin: PinRef{Session: 7392, Pin: 3}, Fields: []string{"network", "events"}}, got)
+		require.Equal(t, PinFetch{Pin: pin, Fields: []string{"network", "events"}}, got)
 	})
 
-	for _, arg := range []string{"7392.2:", "7392.2:all,console", "7392.2:unknown", "7392:console"} {
+	for _, arg := range []string{reportURL[:len(reportURL)-1], "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=0", "7392.2", "7392:console"} {
 		t.Run("rejects "+arg, func(t *testing.T) {
 			_, err := ParsePinFetch(arg, nil)
 
@@ -145,48 +151,52 @@ func TestWireFieldName(t *testing.T) {
 }
 
 func TestDedupAndUnion(t *testing.T) {
+	session := SessionRef{TeamSlug: "abb", ProjectID: 2, SessionNumber: 5}
 	input := []PinFetch{
-		{Pin: PinRef{Session: 7392, Pin: 2}, Fields: []string{"console"}},
-		{Pin: PinRef{Session: 7392, Pin: 3}, Fields: []string{"events"}},
-		{Pin: PinRef{Session: 7392, Pin: 2}, Fields: []string{"screenshot", "network"}},
-		{Pin: PinRef{Session: 7392, Pin: 3}, Fields: []string{"all"}},
+		{Pin: PinRef{Session: session, Pin: 2}, Fields: []string{"console"}},
+		{Pin: PinRef{Session: session, Pin: 3}, Fields: []string{"events"}},
+		{Pin: PinRef{Session: session, Pin: 2}, Fields: []string{"screenshot", "network"}},
+		{Pin: PinRef{Session: session, Pin: 3}, Fields: []string{"all"}},
 	}
 
 	got := DedupAndUnion(input)
 
 	require.Equal(t, []PinFetch{
-		{Pin: PinRef{Session: 7392, Pin: 2}, Fields: []string{"screenshot", "console", "network"}},
-		{Pin: PinRef{Session: 7392, Pin: 3}, Fields: []string{"all"}},
+		{Pin: PinRef{Session: session, Pin: 2}, Fields: []string{"screenshot", "console", "network"}},
+		{Pin: PinRef{Session: session, Pin: 3}, Fields: []string{"all"}},
 	}, got)
 }
 
 func TestDedupAndUnionCanonicalizesFirstOccurrence(t *testing.T) {
+	session := SessionRef{TeamSlug: "abb", ProjectID: 2, SessionNumber: 5}
 	got := DedupAndUnion([]PinFetch{
-		{Pin: PinRef{Session: 1, Pin: 1}, Fields: []string{"network", "console"}},
+		{Pin: PinRef{Session: session, Pin: 1}, Fields: []string{"network", "console"}},
 	})
 
 	require.Equal(t, []PinFetch{
-		{Pin: PinRef{Session: 1, Pin: 1}, Fields: []string{"console", "network"}},
+		{Pin: PinRef{Session: session, Pin: 1}, Fields: []string{"console", "network"}},
 	}, got)
 }
 
 func TestDedupAndUnionAllSupersedesSpecificFields(t *testing.T) {
+	session := SessionRef{TeamSlug: "abb", ProjectID: 2, SessionNumber: 5}
 	got := DedupAndUnion([]PinFetch{
-		{Pin: PinRef{Session: 1, Pin: 1}, Fields: []string{"console"}},
-		{Pin: PinRef{Session: 1, Pin: 1}, Fields: []string{"all"}},
+		{Pin: PinRef{Session: session, Pin: 1}, Fields: []string{"console"}},
+		{Pin: PinRef{Session: session, Pin: 1}, Fields: []string{"all"}},
 	})
 
 	require.Equal(t, []PinFetch{
-		{Pin: PinRef{Session: 1, Pin: 1}, Fields: []string{"all"}},
+		{Pin: PinRef{Session: session, Pin: 1}, Fields: []string{"all"}},
 	}, got)
 }
 
 func TestDedupAndUnionAllSupersedesSpecificFieldsInSameFetch(t *testing.T) {
+	session := SessionRef{TeamSlug: "abb", ProjectID: 2, SessionNumber: 5}
 	got := DedupAndUnion([]PinFetch{
-		{Pin: PinRef{Session: 1, Pin: 1}, Fields: []string{"all", "console"}},
+		{Pin: PinRef{Session: session, Pin: 1}, Fields: []string{"all", "console"}},
 	})
 
 	require.Equal(t, []PinFetch{
-		{Pin: PinRef{Session: 1, Pin: 1}, Fields: []string{"all"}},
+		{Pin: PinRef{Session: session, Pin: 1}, Fields: []string{"all"}},
 	}, got)
 }

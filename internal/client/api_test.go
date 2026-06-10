@@ -10,7 +10,10 @@ import (
 	"testing"
 
 	"github.com/disbug-io/disbug-cli/internal/errfmt"
+	"github.com/disbug-io/disbug-cli/internal/ref"
 )
+
+var testSessionRef = ref.SessionRef{TeamSlug: "acme", ProjectID: 42, SessionNumber: 5}
 
 func TestListSessions(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -38,7 +41,10 @@ func TestListSessions(t *testing.T) {
 		_, _ = io.WriteString(w, `{
 			"results":[{
 				"id":123,
-				"project":{"slug":"web","name":"Website"},
+				"team_slug":"acme",
+				"project":{"id":42,"slug":"42","name":"Website"},
+				"project_session_number":5,
+				"report_url":"https://app.disbug.test/acme/projects/42/sessions/5/",
 				"url":"https://example.test/page",
 				"status":"open",
 				"pin_count":2,
@@ -69,7 +75,7 @@ func TestListSessions(t *testing.T) {
 	if got, want := len(resp.Results), 1; got != want {
 		t.Fatalf("len(Results) = %d, want %d", got, want)
 	}
-	if got, want := resp.Results[0].Project.Slug, "web"; got != want {
+	if got, want := resp.Results[0].Project.Slug, "42"; got != want {
 		t.Fatalf("Project.Slug = %q, want %q", got, want)
 	}
 	if got, want := resp.Results[0].Reporter.Email, "r@example.test"; got != want {
@@ -155,7 +161,9 @@ func TestSearchSessionsPinsScopeMapsPinHitsToSessions(t *testing.T) {
 				},
 				"session":{
 					"id":123,
-					"project":{"slug":"web","name":"Website"},
+					"team_slug":"acme",
+					"project":{"id":42,"slug":"42","name":"Website"},
+					"project_session_number":5,
 					"url":"https://example.test/page",
 					"status":"open",
 					"pin_count":2,
@@ -186,17 +194,17 @@ func TestSearchSessionsPinsScopeMapsPinHitsToSessions(t *testing.T) {
 	if got, want := len(resp.Results), 1; got != want {
 		t.Fatalf("len(Results) = %d, want %d", got, want)
 	}
-	if got, want := resp.Results[0].ID, int64(123); got != want {
-		t.Fatalf("Session.ID = %d, want %d", got, want)
-	}
 	if got, want := resp.Results[0].Status, "open"; got != want {
 		t.Fatalf("Status = %q, want %q", got, want)
 	}
-	if resp.Results[0].Project == nil || resp.Results[0].Project.Slug != "web" {
-		t.Fatalf("Project = %#v, want web project", resp.Results[0].Project)
+	if resp.Results[0].Project == nil || resp.Results[0].Project.ID != 42 {
+		t.Fatalf("Project = %#v, want project 42", resp.Results[0].Project)
 	}
 	if got, want := resp.Results[0].FirstPinFeedback, "checkout broken"; got != want {
 		t.Fatalf("FirstPinFeedback = %q, want %q", got, want)
+	}
+	if got, want := resp.Results[0].ScopedID(), "acme/projects/42/sessions/5"; got != want {
+		t.Fatalf("ScopedID() = %q, want %q", got, want)
 	}
 }
 
@@ -255,7 +263,9 @@ func TestSearchPinsSendsQueryParamsAndDecodesHit(t *testing.T) {
 				},
 				"session":{
 					"id":123,
-					"project":{"slug":"web","name":"Website"},
+					"team_slug":"acme",
+					"project":{"id":42,"slug":"42","name":"Website"},
+					"project_session_number":5,
 					"url":"https://example.test/page",
 					"status":"open",
 					"pin_count":2,
@@ -286,24 +296,27 @@ func TestSearchPinsSendsQueryParamsAndDecodesHit(t *testing.T) {
 	if got, want := len(resp.Results), 1; got != want {
 		t.Fatalf("len(Results) = %d, want %d", got, want)
 	}
-	if got, want := resp.Results[0].Pin.ID, int64(456); got != want {
-		t.Fatalf("Pin.ID = %d, want %d", got, want)
+	if got, want := resp.Results[0].Pin.Number, int64(2); got != want {
+		t.Fatalf("Pin.Number = %d, want %d", got, want)
 	}
-	if got, want := resp.Results[0].Session.ID, int64(123); got != want {
-		t.Fatalf("Session.ID = %d, want %d", got, want)
+	if got, want := resp.Results[0].Session.ScopedID(), "acme/projects/42/sessions/5"; got != want {
+		t.Fatalf("Session.ScopedID() = %q, want %q", got, want)
 	}
 }
 
 func TestGetSession(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got, want := r.URL.Path, "/api/sessions/123/"; got != want {
+		if got, want := r.URL.Path, "/api/teams/acme/projects/42/sessions/5/"; got != want {
 			t.Fatalf("path = %q, want %q", got, want)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{
 			"id":123,
+			"team_slug":"acme",
+			"project_session_number":5,
+			"report_url":"https://app.disbug.test/acme/projects/42/sessions/5/",
 			"status":"open",
-			"project":{"slug":"web","name":"Website"},
+			"project":{"id":42,"slug":"42","name":"Website"},
 			"reporter":{"email":"r@example.test","display_name":"Reporter"},
 			"url":"https://example.test/page",
 			"updated_at":"2026-05-01T12:00:00Z",
@@ -322,7 +335,7 @@ func TestGetSession(t *testing.T) {
 
 	c := New(server.URL, "t", "test", nil, server.Client(), nil)
 
-	session, err := c.GetSession(context.Background(), 123)
+	session, err := c.GetSession(context.Background(), testSessionRef)
 	if err != nil {
 		t.Fatalf("GetSession() error = %v, want nil", err)
 	}
@@ -366,7 +379,7 @@ func TestGetSessionDecodesNullableProjectAndReporter(t *testing.T) {
 
 	c := New(server.URL, "t", "test", nil, server.Client(), nil)
 
-	session, err := c.GetSession(context.Background(), 123)
+	session, err := c.GetSession(context.Background(), testSessionRef)
 	if err != nil {
 		t.Fatalf("GetSession() error = %v, want nil", err)
 	}
@@ -416,7 +429,7 @@ func TestPinLitePreservesNullableURLAndSelector(t *testing.T) {
 
 func TestGetPin_FieldsParam(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got, want := r.URL.Path, "/api/sessions/123/pins/by-number/7/"; got != want {
+		if got, want := r.URL.Path, "/api/teams/acme/projects/42/sessions/5/pins/by-number/7/"; got != want {
 			t.Fatalf("path = %q, want %q", got, want)
 		}
 		if got, want := r.URL.Query().Get("fields"), "console_logs,network_logs"; got != want {
@@ -435,7 +448,7 @@ func TestGetPin_FieldsParam(t *testing.T) {
 
 	c := New(server.URL, "t", "test", nil, server.Client(), nil)
 
-	pin, err := c.GetPinByNumber(context.Background(), 123, 7, []string{"network", "console"})
+	pin, err := c.GetPinByNumber(context.Background(), testSessionRef, 7, []string{"network", "console"})
 	if err != nil {
 		t.Fatalf("GetPinByNumber() error = %v, want nil", err)
 	}
@@ -469,7 +482,7 @@ func assertGetPinOmitsFields(t *testing.T, fields []string) {
 
 	c := New(server.URL, "t", "test", nil, server.Client(), nil)
 
-	if _, err := c.GetPinByNumber(context.Background(), 123, 7, fields); err != nil {
+	if _, err := c.GetPinByNumber(context.Background(), testSessionRef, 7, fields); err != nil {
 		t.Fatalf("GetPinByNumber() error = %v, want nil", err)
 	}
 }
@@ -481,7 +494,7 @@ func TestGetPin_UnknownFieldReturnsErrorWithoutHTTPRequest(t *testing.T) {
 		return nil, errors.New("unexpected call")
 	}), nil)
 
-	_, err := c.GetPinByNumber(context.Background(), 123, 7, []string{"unknown"})
+	_, err := c.GetPinByNumber(context.Background(), testSessionRef, 7, []string{"unknown"})
 	if err == nil {
 		t.Fatal("GetPinByNumber() error = nil, want validation error")
 	}
@@ -510,7 +523,7 @@ func TestGetPin_DecodesHeavyFields(t *testing.T) {
 
 	c := New(server.URL, "t", "test", nil, server.Client(), nil)
 
-	pin, err := c.GetPinByNumber(context.Background(), 123, 7, []string{"all"})
+	pin, err := c.GetPinByNumber(context.Background(), testSessionRef, 7, []string{"all"})
 	if err != nil {
 		t.Fatalf("GetPinByNumber() error = %v, want nil", err)
 	}
@@ -542,7 +555,7 @@ func TestBulkResultExitCodeFromFirstFailure(t *testing.T) {
 	}
 
 	result = BulkResult{
-		Pins:   []*PinFull{{PinLite: PinLite{ID: 1}}},
+		Pins:   []*PinFull{{PinLite: PinLite{Number: 1}}},
 		Errors: []BulkErrItem{{Code: "not_found", Message: "missing"}},
 	}
 	if result.AllFailed() {

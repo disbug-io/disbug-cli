@@ -16,13 +16,15 @@ import (
 
 // GetPinsItem is one pin fetch request in the get_pins MCP tool input.
 type GetPinsItem struct {
-	Pin    string   `json:"pin" jsonschema:"pin reference e.g. 7392.2"`
+	Target string   `json:"target,omitempty" jsonschema:"Disbug report URL with ?pin=<number>"`
+	URL    string   `json:"url,omitempty" jsonschema:"Disbug report URL with ?pin=<number>"`
+	Pin    string   `json:"pin,omitempty" jsonschema:"Disbug report URL with ?pin=<number>, or local_<id>.<number> for source=local"`
 	Fields []string `json:"fields,omitempty" jsonschema:"fields for this pin; defaults to default_fields"`
 }
 
 // GetPinsInput is the input for the get_pins MCP tool.
 type GetPinsInput struct {
-	Items         []GetPinsItem `json:"items" jsonschema:"array of {pin, fields?} entries"`
+	Items         []GetPinsItem `json:"items" jsonschema:"array of {target|url|pin, fields?} entries"`
 	Source        string        `json:"source,omitempty" jsonschema:"Source: auto, cloud, or local"`
 	DefaultFields []string      `json:"default_fields,omitempty" jsonschema:"fields used when an item omits its own list"`
 }
@@ -30,7 +32,7 @@ type GetPinsInput struct {
 func registerGetPins(srv *sdkmcp.Server, deps *Deps) {
 	sdkmcp.AddTool[GetPinsInput, Result](srv, &sdkmcp.Tool{
 		Name: "get_pins",
-		Description: "Bulk fetch Disbug pins by session.pin references. Each pin may select its own fields; " +
+		Description: "Bulk fetch Disbug pins by report URLs. Each pin may select its own fields; " +
 			"items without fields use default_fields or all fields. Partial failures are returned in errors and " +
 			"are not tool errors unless every item fails.",
 	}, func(
@@ -47,7 +49,7 @@ func registerGetPins(srv *sdkmcp.Server, deps *Deps) {
 		if err != nil {
 			return nil, nil, toolErr(err)
 		}
-		if source == sourceLocal || (source == sourceAuto && strings.HasPrefix(in.Items[0].Pin, "local_")) {
+		if source == sourceLocal || (source == sourceAuto && strings.HasPrefix(itemTarget(in.Items[0]), "local_")) {
 			result, err := getLocalPins(ctx, deps, in)
 			if err != nil {
 				return nil, nil, err
@@ -68,13 +70,17 @@ func registerGetPins(srv *sdkmcp.Server, deps *Deps) {
 
 		parsed := make([]ref.PinFetch, 0, len(in.Items))
 		for _, item := range in.Items {
-			rawRef := item.Pin
-			if len(item.Fields) > 0 {
-				rawRef = joinFields(item.Pin, item.Fields)
-			}
+			rawRef := itemTarget(item)
 			pinFetch, err := ref.ParsePinFetch(rawRef, defaultFields)
 			if err != nil {
 				return nil, nil, errors.New(errfmt.Format(&errfmt.UsageError{Message: err.Error()}))
+			}
+			if len(item.Fields) > 0 {
+				fields, err := ref.NormalizeFields(item.Fields)
+				if err != nil {
+					return nil, nil, errors.New(errfmt.Format(&errfmt.UsageError{Message: err.Error()}))
+				}
+				pinFetch.Fields = fields
 			}
 			parsed = append(parsed, pinFetch)
 		}
@@ -83,7 +89,7 @@ func registerGetPins(srv *sdkmcp.Server, deps *Deps) {
 		if err := deps.Client.RequireCapability(ctx, "pin_field_selection"); err != nil {
 			return nil, nil, errors.New(errfmt.Format(err))
 		}
-		if err := deps.Client.RequireCapability(ctx, "pin_by_number"); err != nil {
+		if err := deps.Client.RequireCapability(ctx, "scoped_pin_lookup"); err != nil {
 			return nil, nil, errors.New(errfmt.Format(err))
 		}
 
@@ -105,9 +111,10 @@ func getLocalPins(ctx context.Context, deps *Deps, in GetPinsInput) (Result, err
 	pins := make([]any, 0, len(in.Items))
 	errs := make([]any, 0)
 	for _, item := range in.Items {
-		sessionID, number, err := parseLocalPinRef(item.Pin)
+		rawRef := itemTarget(item)
+		sessionID, number, err := parseLocalPinRef(rawRef)
 		if err != nil {
-			errs = append(errs, map[string]any{"pin": item.Pin, "error_message": errfmt.Format(err)})
+			errs = append(errs, map[string]any{"pin": rawRef, "error_message": errfmt.Format(err)})
 			continue
 		}
 		fields := item.Fields
@@ -116,7 +123,7 @@ func getLocalPins(ctx context.Context, deps *Deps, in GetPinsInput) (Result, err
 		}
 		pin, err := store.GetPin(ctx, sessionID, number, fields)
 		if err != nil {
-			errs = append(errs, map[string]any{"pin": item.Pin, "error_message": mapLocalErr(sessionID, err).Error()})
+			errs = append(errs, map[string]any{"pin": rawRef, "error_message": mapLocalErr(sessionID, err).Error()})
 			continue
 		}
 		pins = append(pins, pin)
@@ -127,8 +134,14 @@ func getLocalPins(ctx context.Context, deps *Deps, in GetPinsInput) (Result, err
 	return Result{"pins": pins, "errors": errs}, nil
 }
 
-func joinFields(pin string, fields []string) string {
-	return pin + ":" + strings.Join(fields, ",")
+func itemTarget(item GetPinsItem) string {
+	if strings.TrimSpace(item.Target) != "" {
+		return strings.TrimSpace(item.Target)
+	}
+	if strings.TrimSpace(item.URL) != "" {
+		return strings.TrimSpace(item.URL)
+	}
+	return strings.TrimSpace(item.Pin)
 }
 
 func bulkPinsFailureError(res client.BulkResult) error {

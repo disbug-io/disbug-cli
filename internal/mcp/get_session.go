@@ -13,25 +13,33 @@ import (
 
 // GetSessionInput is the input for the get_session MCP tool.
 type GetSessionInput struct {
-	ID      string `json:"id,omitempty" jsonschema:"session id e.g. 7392 or local_..."`
-	Session string `json:"session,omitempty" jsonschema:"session id e.g. 7392 or local_..."`
+	Target  string `json:"target,omitempty" jsonschema:"Disbug report URL, or local report id for source=local"`
+	URL     string `json:"url,omitempty" jsonschema:"Disbug report URL"`
+	ID      string `json:"id,omitempty" jsonschema:"local report id e.g. local_..."`
+	Session string `json:"session,omitempty" jsonschema:"local report id e.g. local_..."`
 	Source  string `json:"source,omitempty" jsonschema:"Source: auto, cloud, or local"`
 }
 
 func registerGetSession(srv *sdkmcp.Server, deps *Deps) {
 	sdkmcp.AddTool[GetSessionInput, Result](srv, &sdkmcp.Tool{
 		Name:        "get_session",
-		Description: "Get full details for a Disbug session, including pins, from cloud or local source.",
+		Description: "Get full details for a Disbug session. Use a report URL for cloud, or a local report id for source=local.",
 	}, func(
 		ctx context.Context,
 		_ *sdkmcp.CallToolRequest,
 		in GetSessionInput,
 	) (*sdkmcp.CallToolResult, Result, error) {
-		id := strings.TrimSpace(in.ID)
-		if id == "" {
-			id = strings.TrimSpace(in.Session)
+		target := strings.TrimSpace(in.Target)
+		if target == "" {
+			target = strings.TrimSpace(in.URL)
 		}
-		source, err := routeSessionSource(in.Source, id, deps)
+		if target == "" {
+			target = strings.TrimSpace(in.ID)
+		}
+		if target == "" {
+			target = strings.TrimSpace(in.Session)
+		}
+		source, err := routeSessionSource(in.Source, target, deps)
 		if err != nil {
 			return nil, nil, toolErr(err)
 		}
@@ -40,9 +48,9 @@ func registerGetSession(srv *sdkmcp.Server, deps *Deps) {
 			if err != nil {
 				return nil, nil, errors.New(err.Error())
 			}
-			resp, err := store.GetSession(ctx, id)
+			resp, err := store.GetSession(ctx, target)
 			if err != nil {
-				return nil, nil, errors.New(mapLocalErr(id, err).Error())
+				return nil, nil, errors.New(mapLocalErr(target, err).Error())
 			}
 			result := Result(resp)
 			return jsonResult(result), result, nil
@@ -51,12 +59,12 @@ func registerGetSession(srv *sdkmcp.Server, deps *Deps) {
 			return nil, nil, toolErr(err)
 		}
 
-		sessionRef, err := ref.ParseSession(id)
+		sessionRef, err := ref.ParseSession(target)
 		if err != nil {
 			return nil, nil, errors.New(errfmt.Format(&errfmt.UsageError{Message: err.Error()}))
 		}
 
-		resp, err := deps.Client.GetSession(ctx, sessionRef.ID)
+		resp, err := deps.Client.GetSession(ctx, sessionRef)
 		if err != nil {
 			return nil, nil, errors.New(errfmt.Format(err))
 		}

@@ -23,9 +23,9 @@ func TestGetPins_InProcessPartialSuccess(t *testing.T) {
 				"team":"Disbug",
 				"team_slug":"disbug",
 				"api_version":"2026-05-01",
-				"capabilities":["pin_field_selection","pin_by_number"]
+				"capabilities":["pin_field_selection","scoped_pin_lookup"]
 			}`)
-		case "/api/sessions/7392/pins/by-number/2/":
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/2/":
 			_, _ = io.WriteString(w, `{
 				"id":44,
 				"number":2,
@@ -42,7 +42,7 @@ func TestGetPins_InProcessPartialSuccess(t *testing.T) {
 				"network":null,
 				"events":null
 			}`)
-		case "/api/sessions/7392/pins/by-number/3/":
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/3/":
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = io.WriteString(w, `{"code":"not_found","detail":"pin not found","request_id":"req-pin-3"}`)
 		default:
@@ -56,8 +56,8 @@ func TestGetPins_InProcessPartialSuccess(t *testing.T) {
 
 	res, err := callTool(t, srv, "get_pins", map[string]any{
 		"items": []map[string]any{
-			{"pin": "7392.2"},
-			{"pin": "7392.3", "fields": []string{"network", "events"}},
+			{"pin": "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2"},
+			{"pin": "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=3", "fields": []string{"network", "events"}},
 		},
 		"default_fields": []string{"console"},
 	})
@@ -68,7 +68,7 @@ func TestGetPins_InProcessPartialSuccess(t *testing.T) {
 		t.Fatalf("get_pins IsError = true, want false: %#v", res.Content)
 	}
 	text := firstTextContent(t, res)
-	for _, want := range []string{`"pins"`, `"errors"`, "button still broken", `"pin":"7392.3"`} {
+	for _, want := range []string{`"pins"`, `"errors"`, "button still broken", `"pin":"abb/projects/2/sessions/5?pin=3"`} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("get_pins content = %q, want %q", text, want)
 		}
@@ -85,26 +85,26 @@ func TestGetPins_InProcessPartialSuccess(t *testing.T) {
 		pinRequests[req.URL.Path] = req
 	}
 
-	req = pinRequests["/api/sessions/7392/pins/by-number/2/"]
+	req = pinRequests["/api/teams/abb/projects/2/sessions/5/pins/by-number/2/"]
 	if req == nil {
-		t.Fatal("missing request for pin 7392.2")
+		t.Fatal("missing request for pin https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2")
 	}
 	if got, want := req.URL.Query().Get("fields"), "console_logs"; got != want {
-		t.Fatalf("pin 7392.2 fields query = %q, want %q", got, want)
+		t.Fatalf("pin https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2 fields query = %q, want %q", got, want)
 	}
 	if got, want := req.Header.Get("Authorization"), "Bearer dba_test"; got != want {
-		t.Fatalf("pin 7392.2 Authorization = %q, want %q", got, want)
+		t.Fatalf("pin https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2 Authorization = %q, want %q", got, want)
 	}
 
-	req = pinRequests["/api/sessions/7392/pins/by-number/3/"]
+	req = pinRequests["/api/teams/abb/projects/2/sessions/5/pins/by-number/3/"]
 	if req == nil {
-		t.Fatal("missing request for pin 7392.3")
+		t.Fatal("missing request for pin https://staging.disbug.us/abb/projects/2/sessions/5/?pin=3")
 	}
 	if got, want := req.URL.Query().Get("fields"), "network_logs,user_events"; got != want {
-		t.Fatalf("pin 7392.3 fields query = %q, want %q", got, want)
+		t.Fatalf("pin https://staging.disbug.us/abb/projects/2/sessions/5/?pin=3 fields query = %q, want %q", got, want)
 	}
 	if got, want := req.Header.Get("Authorization"), "Bearer dba_test"; got != want {
-		t.Fatalf("pin 7392.3 Authorization = %q, want %q", got, want)
+		t.Fatalf("pin https://staging.disbug.us/abb/projects/2/sessions/5/?pin=3 Authorization = %q, want %q", got, want)
 	}
 }
 
@@ -118,12 +118,12 @@ func TestGetPins_AllFailedReturnsToolError(t *testing.T) {
 				"team":"Disbug",
 				"team_slug":"disbug",
 				"api_version":"2026-05-01",
-				"capabilities":["pin_field_selection","pin_by_number"]
+				"capabilities":["pin_field_selection","scoped_pin_lookup"]
 			}`)
-		case "/api/sessions/7392/pins/by-number/2/":
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/2/":
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = io.WriteString(w, `{"code":"not_found","detail":"pin not found"}`)
-		case "/api/sessions/7392/pins/by-number/3/":
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/3/":
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = io.WriteString(w, `{"code":"not_found","detail":"pin not found"}`)
 		default:
@@ -136,7 +136,7 @@ func TestGetPins_AllFailedReturnsToolError(t *testing.T) {
 	srv := newServer(&Deps{Client: cli})
 
 	res, err := callTool(t, srv, "get_pins", map[string]any{
-		"items": []map[string]any{{"pin": "7392.2"}, {"pin": "7392.3"}},
+		"items": []map[string]any{{"pin": "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2"}, {"pin": "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=3"}},
 	})
 	if err != nil {
 		t.Fatalf("CallTool(get_pins) error = %v, want nil tool error result", err)
@@ -148,7 +148,7 @@ func TestGetPins_AllFailedReturnsToolError(t *testing.T) {
 		t.Fatalf("get_pins StructuredContent = %#v, want nil on tool error", res.StructuredContent)
 	}
 	text := firstTextContent(t, res)
-	for _, want := range []string{"all 2 pin fetches failed", "first failure 7392.2", "not found"} {
+	for _, want := range []string{"all 2 pin fetches failed", "first failure abb/projects/2/sessions/5?pin=2", "not found"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("get_pins error content = %q, want %q", text, want)
 		}
@@ -165,9 +165,9 @@ func TestGetPins_AllFailedAuthErrorIsSanitized(t *testing.T) {
 				"team":"Disbug",
 				"team_slug":"disbug",
 				"api_version":"2026-05-01",
-				"capabilities":["pin_field_selection","pin_by_number"]
+				"capabilities":["pin_field_selection","scoped_pin_lookup"]
 			}`)
-		case "/api/sessions/7392/pins/by-number/2/":
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/2/":
 			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = io.WriteString(w, `{"code":"auth_required","detail":"token dba_secret_123 was rejected"}`)
 		default:
@@ -180,7 +180,7 @@ func TestGetPins_AllFailedAuthErrorIsSanitized(t *testing.T) {
 	srv := newServer(&Deps{Client: cli})
 
 	res, err := callTool(t, srv, "get_pins", map[string]any{
-		"items": []map[string]any{{"pin": "7392.2"}},
+		"items": []map[string]any{{"pin": "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2"}},
 	})
 	if err != nil {
 		t.Fatalf("CallTool(get_pins) error = %v, want nil tool error result", err)
@@ -194,7 +194,7 @@ func TestGetPins_AllFailedAuthErrorIsSanitized(t *testing.T) {
 	text := firstTextContent(t, res)
 	for _, want := range []string{
 		"all 1 pin fetches failed",
-		"first failure 7392.2",
+		"first failure abb/projects/2/sessions/5?pin=2",
 		"Your token was rejected or no token was found. Run: disbug login",
 	} {
 		if !strings.Contains(text, want) {
@@ -217,9 +217,9 @@ func TestGetPins_MissingCapabilityReturnsToolError(t *testing.T) {
 				"team":"Disbug",
 				"team_slug":"disbug",
 				"api_version":"2026-05-01",
-				"capabilities":["pin_by_number"]
+				"capabilities":["scoped_pin_lookup"]
 			}`)
-		case "/api/sessions/7392/pins/by-number/2/":
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/2/":
 			pinEndpointCalled = true
 			t.Fatalf("pin endpoint called despite missing capability")
 		default:
@@ -232,7 +232,7 @@ func TestGetPins_MissingCapabilityReturnsToolError(t *testing.T) {
 	srv := newServer(&Deps{Client: cli})
 
 	res, err := callTool(t, srv, "get_pins", map[string]any{
-		"items": []map[string]any{{"pin": "7392.2"}},
+		"items": []map[string]any{{"pin": "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2"}},
 	})
 	if err != nil {
 		t.Fatalf("CallTool(get_pins) error = %v, want nil tool error result", err)
@@ -268,7 +268,7 @@ func TestGetPins_InvalidInputReturnsToolError(t *testing.T) {
 		{
 			name: "invalid field",
 			args: map[string]any{
-				"items": []map[string]any{{"pin": "7392.2", "fields": []string{"console", "unknown"}}},
+				"items": []map[string]any{{"pin": "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2", "fields": []string{"console", "unknown"}}},
 			},
 		},
 	}
@@ -286,13 +286,6 @@ func TestGetPins_InvalidInputReturnsToolError(t *testing.T) {
 				t.Fatalf("get_pins StructuredContent = %#v, want nil on tool error", res.StructuredContent)
 			}
 		})
-	}
-}
-
-func TestJoinFields(t *testing.T) {
-	got := joinFields("7392.2", []string{"console", "network"})
-	if want := "7392.2:console,network"; got != want {
-		t.Fatalf("joinFields() = %q, want %q", got, want)
 	}
 }
 

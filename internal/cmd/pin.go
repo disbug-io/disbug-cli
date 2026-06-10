@@ -9,9 +9,10 @@ import (
 	"github.com/disbug-io/disbug-cli/internal/ref"
 )
 
-// PinCmd shows a single pin by session and pin number.
+// PinCmd shows a single pin by report URL and pin number.
 type PinCmd struct {
-	Ref    string `arg:"" name:"pin" help:"Pin reference (e.g. 7392.2)"`
+	Ref    string `arg:"" name:"url" help:"Disbug report URL with ?pin=<number>."`
+	Pin    int64  `help:"Pin number when the report URL does not include ?pin=."`
 	Fields string `help:"Comma-separated fields: screenshot,console,network,events,replay,voice_note,video,all" default:"all"`
 }
 
@@ -19,7 +20,11 @@ type PinCmd struct {
 func (c *PinCmd) Run(ctx context.Context, b bindings) error {
 	pinRef, err := ref.ParsePin(c.Ref)
 	if err != nil {
-		return &errfmt.UsageError{Message: err.Error()}
+		sessionRef, sessionErr := ref.ParseSession(c.Ref)
+		if sessionErr != nil || c.Pin <= 0 {
+			return &errfmt.UsageError{Message: err.Error()}
+		}
+		pinRef = ref.PinRef{Session: sessionRef, Pin: c.Pin}
 	}
 
 	fields, err := ref.NormalizeFields(strings.Split(c.Fields, ","))
@@ -35,7 +40,7 @@ func (c *PinCmd) Run(ctx context.Context, b bindings) error {
 	if err := cli.RequireCapability(ctx, "pin_field_selection"); err != nil {
 		return err
 	}
-	if err := cli.RequireCapability(ctx, "pin_by_number"); err != nil {
+	if err := cli.RequireCapability(ctx, "scoped_pin_lookup"); err != nil {
 		return err
 	}
 
@@ -44,7 +49,7 @@ func (c *PinCmd) Run(ctx context.Context, b bindings) error {
 		return err
 	}
 
-	resolved, err := cli.ResolveReplay(ctx, resp, pinRef.Session, pinRef.Pin)
+	resolved, err := cli.ResolveReplay(ctx, resp, pinRef.Session.SessionNumber, pinRef.Pin)
 	if err != nil {
 		return err
 	}

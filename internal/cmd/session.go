@@ -8,9 +8,9 @@ import (
 	"github.com/disbug-io/disbug-cli/internal/ref"
 )
 
-// SessionCmd shows a single session.
+// SessionCmd shows a single session by report URL.
 type SessionCmd struct {
-	Ref string `arg:"" name:"session" help:"Session id (e.g. 7392)"`
+	Ref string `arg:"" name:"url" help:"Disbug report URL (e.g. https://app.disbug.io/team/projects/1/sessions/2/)"`
 }
 
 // Run fetches a session detail response and writes it as JSON.
@@ -25,7 +25,7 @@ func (c *SessionCmd) Run(ctx context.Context, b bindings) error {
 		return err
 	}
 
-	resp, err := cli.GetSession(ctx, sref.ID)
+	resp, err := cli.GetSession(ctx, sref)
 	if err != nil {
 		return err
 	}

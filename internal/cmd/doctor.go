@@ -16,7 +16,7 @@ import (
 // DoctorCmd checks local CLI configuration and backend compatibility.
 type DoctorCmd struct{}
 
-var requiredCapabilities = []string{"search", "pin_field_selection", "pin_by_number"}
+var requiredCapabilities = []string{"search", "pin_field_selection", "scoped_session_lookup", "scoped_pin_lookup"}
 
 // Run prints a simple human-readable health report.
 func (c *DoctorCmd) Run(ctx context.Context, b bindings) error {

@@ -56,8 +56,8 @@ func TestSessionsBasicList(t *testing.T) {
 	if got := stderr; got != "" {
 		t.Fatalf("stderr = %q, want empty", got)
 	}
-	if got := stdout; !bytes.Contains([]byte(got), []byte(`"id":123`)) {
-		t.Fatalf("stdout = %q, want session id", got)
+	if got := stdout; bytes.Contains([]byte(got), []byte(`"id":123`)) {
+		t.Fatalf("stdout = %q, should not expose session database id", got)
 	}
 	if got := stdout; !bytes.Contains([]byte(got), []byte(`"status":"open"`)) {
 		t.Fatalf("stdout = %q, want session status", got)
@@ -211,8 +211,11 @@ func TestSessionsPrettyOutput(t *testing.T) {
 	if got := stderr; got != "" {
 		t.Fatalf("stderr = %q, want empty", got)
 	}
-	if got := stdout; !bytes.Contains([]byte(got), []byte("{\n  \"results\": [\n    {\n      \"id\": 123")) {
+	if got := stdout; !bytes.Contains([]byte(got), []byte("{\n  \"results\": [\n    {\n      \"team_slug\":")) {
 		t.Fatalf("stdout = %q, want indented JSON", got)
+	}
+	if got := stdout; bytes.Contains([]byte(got), []byte(`"id": 123`)) {
+		t.Fatalf("stdout = %q, should not expose session database id", got)
 	}
 }
 

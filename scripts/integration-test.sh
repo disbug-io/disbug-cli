@@ -38,7 +38,7 @@ run_step "sessions" "$BIN" sessions --limit 5 --pretty
 SESSIONS_JSON="$TMP/sessions.json"
 run_step "sessions --limit 1" "$BIN" sessions --limit 1 --pretty >"$SESSIONS_JSON"
 
-SESSION_ID=$(
+SESSION_URL=$(
   python3 - "$SESSIONS_JSON" <<'PY'
 import json
 import sys
@@ -50,23 +50,23 @@ results = payload.get("results") or []
 if not results:
     sys.exit(2)
 
-session_id = results[0].get("id")
-if session_id in (None, ""):
+session_url = results[0].get("report_url")
+if session_url in (None, ""):
     sys.exit(3)
 
-print(session_id)
+print(session_url)
 PY
 ) || {
   status=$?
   if [[ "$status" -eq 2 ]]; then
     fail "sessions returned no results"
   fi
-  fail "extract first session ID"
+  fail "extract first session URL"
 }
 
 SESSION_JSON="$TMP/session.json"
-if ! "$BIN" session "$SESSION_ID" --pretty | tee "$SESSION_JSON"; then
-  fail "session $SESSION_ID"
+if ! "$BIN" session "$SESSION_URL" --pretty | tee "$SESSION_JSON"; then
+  fail "session $SESSION_URL"
 fi
 
 PIN_NUMBER=$(
@@ -90,11 +90,12 @@ PY
 ) || {
   status=$?
   if [[ "$status" -eq 2 ]]; then
-    fail "session $SESSION_ID returned no pins"
+    fail "session $SESSION_URL returned no pins"
   fi
   fail "extract first pin number"
 }
 
-run_step "pin $SESSION_ID.$PIN_NUMBER" "$BIN" pin "$SESSION_ID.$PIN_NUMBER" --fields screenshot --pretty
+PIN_URL="${SESSION_URL%/}/?pin=$PIN_NUMBER"
+run_step "pin $PIN_URL" "$BIN" pin "$PIN_URL" --fields screenshot --pretty
 
 echo "PASS"

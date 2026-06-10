@@ -11,16 +11,16 @@ import (
 	"github.com/disbug-io/disbug-cli/internal/ref"
 )
 
-// PinsCmd fetches multiple pins by session and pin number.
+// PinsCmd fetches multiple pins by report URL and pin number.
 type PinsCmd struct {
-	Refs   []string `arg:"" name:"refs" help:"One or more pin refs (e.g. 7392.2 or 7392.2:console,network)"`
-	Fields string   `help:"Default fields when ref omits :<fields>" default:"all"`
+	Refs   []string `arg:"" name:"urls" help:"One or more Disbug report URLs with ?pin=<number>."`
+	Fields string   `help:"Default fields when a URL omits the fields query parameter." default:"all"`
 }
 
 // Run fetches pins in bulk and writes the aggregate result as JSON.
 func (c *PinsCmd) Run(ctx context.Context, b bindings) error {
 	if len(c.Refs) == 0 {
-		return &errfmt.UsageError{Message: "at least one pin ref is required"}
+		return &errfmt.UsageError{Message: "at least one pin URL is required"}
 	}
 
 	defaultFields, err := ref.NormalizeFields(strings.Split(c.Fields, ","))
@@ -46,7 +46,7 @@ func (c *PinsCmd) Run(ctx context.Context, b bindings) error {
 	if err := cli.RequireCapability(ctx, "pin_field_selection"); err != nil {
 		return err
 	}
-	if err := cli.RequireCapability(ctx, "pin_by_number"); err != nil {
+	if err := cli.RequireCapability(ctx, "scoped_pin_lookup"); err != nil {
 		return err
 	}
 

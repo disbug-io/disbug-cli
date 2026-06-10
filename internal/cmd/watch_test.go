@@ -296,7 +296,10 @@ func TestWatchCloudOnlyBackfillsAndPollsCloudSessions(t *testing.T) {
 			_, _ = io.WriteString(w, `{
 				"results":[{
 					"id":123,
-					"project":{"slug":"web","name":"Website"},
+					"team_slug":"abb",
+					"project":{"id":2,"slug":"2","name":"Website"},
+					"project_session_number":5,
+					"report_url":"https://staging.disbug.us/abb/projects/2/sessions/5/",
 					"url":"https://example.test/page",
 					"status":"open",
 					"pin_count":1,
@@ -310,13 +313,16 @@ func TestWatchCloudOnlyBackfillsAndPollsCloudSessions(t *testing.T) {
 				"count":1,
 				"free_tier_truncated":false
 			}`)
-		case "/api/sessions/123/":
+		case "/api/teams/abb/projects/2/sessions/5/":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = io.WriteString(w, `{
 				"id":123,
+				"team_slug":"abb",
+				"project_session_number":5,
 				"status":"open",
-				"project":{"slug":"web","name":"Website"},
+				"project":{"id":2,"slug":"2","name":"Website"},
 				"reporter":{"email":"r@example.test","display_name":"Reporter"},
+				"report_url":"https://staging.disbug.us/abb/projects/2/sessions/5/",
 				"url":"https://example.test/page",
 				"updated_at":"2026-05-23T08:21:00Z",
 				"pins":[{"id":456,"number":1,"feedback":"cloud feedback","url":"https://example.test/page#pin"}]
@@ -347,9 +353,9 @@ func TestWatchCloudOnlyBackfillsAndPollsCloudSessions(t *testing.T) {
 	for _, want := range []string{
 		`"source":"cloud"`,
 		`"backfill":true`,
-		`"id":"123"`,
-		`"ref":"disbug://cloud/123"`,
-		`"project":"web"`,
+		`"id":"abb/projects/2/sessions/5"`,
+		`"ref":"https://staging.disbug.us/abb/projects/2/sessions/5/"`,
+		`"project":"2"`,
 		`"pin_number":1`,
 		`"feedback":"cloud feedback"`,
 	} {
@@ -357,7 +363,7 @@ func TestWatchCloudOnlyBackfillsAndPollsCloudSessions(t *testing.T) {
 			t.Fatalf("stdout = %q, want %q", output, want)
 		}
 	}
-	if got := strings.Count(output, `"id":"123"`); got != 1 {
+	if got := strings.Count(output, `"id":"abb/projects/2/sessions/5"`); got != 1 {
 		t.Fatalf("cloud session emitted %d times, want once; stdout=%q", got, output)
 	}
 	if listRequests < 2 {

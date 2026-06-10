@@ -365,7 +365,11 @@ func cloudWatchEvent(
 	backfill bool,
 	emittedAt time.Time,
 ) (watchEvent, error) {
-	detail, err := cli.GetSession(ctx, summary.ID)
+	sessionRef, err := summary.SessionRef()
+	if err != nil {
+		return watchEvent{}, err
+	}
+	detail, err := cli.GetSession(ctx, sessionRef)
 	if err != nil {
 		return watchEvent{}, err
 	}
@@ -386,7 +390,7 @@ func cloudWatchEvent(
 		return pins[i].PinNumber < pins[j].PinNumber
 	})
 
-	id := strconv.FormatInt(summary.ID, 10)
+	id := summary.ScopedID()
 	createdAt := summary.CreatedAt
 	if createdAt == "" {
 		createdAt = summary.UpdatedAt
@@ -408,6 +412,10 @@ func cloudWatchEvent(
 	if sourceURL == "" {
 		sourceURL = detail.URL
 	}
+	reportURL := summary.ReportURL
+	if reportURL == "" {
+		reportURL = detail.ReportURL
+	}
 	pinCount := summary.PinCount
 	if pinCount == 0 {
 		pinCount = len(pins)
@@ -420,8 +428,8 @@ func cloudWatchEvent(
 		EmittedAt: emittedAt.UTC().Format(time.RFC3339),
 		Session: watchSession{
 			ID:        id,
-			Ref:       "disbug://cloud/" + id,
-			URL:       sourceURL,
+			Ref:       reportURL,
+			URL:       reportURL,
 			CreatedAt: createdAt,
 			Status:    status,
 			Project:   project,
@@ -498,7 +506,7 @@ func seedCloudDedupe(ctx context.Context, cli *client.Client, status string, pro
 		return err
 	}
 	for _, summary := range resp.Results {
-		dedupe[dedupeKey("cloud", strconv.FormatInt(summary.ID, 10))] = true
+		dedupe[dedupeKey("cloud", summary.ScopedID())] = true
 	}
 	return nil
 }

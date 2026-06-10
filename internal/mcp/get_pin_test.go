@@ -22,9 +22,9 @@ func TestGetPin_InProcess(t *testing.T) {
 				"team":"Disbug",
 				"team_slug":"disbug",
 				"api_version":"2026-05-01",
-				"capabilities":["pin_field_selection","pin_by_number"]
+				"capabilities":["pin_field_selection","scoped_pin_lookup"]
 			}`)
-		case "/api/sessions/7392/pins/by-number/2/":
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/2/":
 			_, _ = io.WriteString(w, `{
 				"id":44,
 				"number":2,
@@ -51,7 +51,7 @@ func TestGetPin_InProcess(t *testing.T) {
 	srv := newServer(&Deps{Client: cli})
 
 	res, err := callTool(t, srv, "get_pin", map[string]any{
-		"pin":    "7392.2",
+		"pin":    "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2",
 		"fields": []string{"console", "network"},
 	})
 	if err != nil {
@@ -69,7 +69,7 @@ func TestGetPin_InProcess(t *testing.T) {
 	if got, want := req.Header.Get("Authorization"), "Bearer dba_test"; got != want {
 		t.Fatalf("/api/me/ Authorization = %q, want %q", got, want)
 	}
-	req = waitForRequest(t, requests, "/api/sessions/7392/pins/by-number/2/")
+	req = waitForRequest(t, requests, "/api/teams/abb/projects/2/sessions/5/pins/by-number/2/")
 	if got, want := req.Method, http.MethodGet; got != want {
 		t.Fatalf("pin request method = %q, want %q", got, want)
 	}
@@ -92,9 +92,9 @@ func TestGetPin_MissingCapabilityReturnsToolError(t *testing.T) {
 				"team":"Disbug",
 				"team_slug":"disbug",
 				"api_version":"2026-05-01",
-				"capabilities":["pin_by_number"]
+				"capabilities":["scoped_pin_lookup"]
 			}`)
-		case "/api/sessions/7392/pins/by-number/2/":
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/2/":
 			pinEndpointCalled = true
 			t.Fatalf("pin endpoint called despite missing capability")
 		default:
@@ -106,7 +106,7 @@ func TestGetPin_MissingCapabilityReturnsToolError(t *testing.T) {
 	cli := client.New(backend.URL, "dba_test", "disbug-cli-test", nil, backend.Client(), nil)
 	srv := newServer(&Deps{Client: cli})
 
-	res, err := callTool(t, srv, "get_pin", map[string]any{"pin": "7392.2"})
+	res, err := callTool(t, srv, "get_pin", map[string]any{"pin": "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2"})
 	if err != nil {
 		t.Fatalf("CallTool(get_pin) error = %v, want nil tool error result", err)
 	}
@@ -131,7 +131,7 @@ func TestGetPin_InvalidFieldsReturnsToolError(t *testing.T) {
 	srv := newServer(&Deps{Client: cli})
 
 	res, err := callTool(t, srv, "get_pin", map[string]any{
-		"pin":    "7392.2",
+		"pin":    "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2",
 		"fields": []string{"console", "unknown"},
 	})
 	if err != nil {

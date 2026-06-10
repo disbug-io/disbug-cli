@@ -126,7 +126,10 @@ func TestMCPSubprocessToolsCall(t *testing.T) {
 					writeJSON(t, w, `{
 						"results":[{
 							"id":7392,
-							"project":{"slug":"web","name":"Web"},
+							"team_slug":"abb",
+							"project":{"id":2,"slug":"2","name":"Web"},
+							"project_session_number":5,
+							"report_url":"https://staging.disbug.us/abb/projects/2/sessions/5/",
 							"url":"https://example.test/checkout",
 							"status":"open",
 							"pin_count":2,
@@ -141,36 +144,39 @@ func TestMCPSubprocessToolsCall(t *testing.T) {
 					}`)
 				},
 			}),
-			wantText:  []string{`"id":7392`, `"status":"open"`, "checkout button broken"},
+			wantText:  []string{`"report_url":"https://staging.disbug.us/abb/projects/2/sessions/5/"`, `"status":"open"`, "checkout button broken"},
 			wantPaths: []string{"/api/sessions/"},
 			wantQuery: map[string]string{"status": "open", "project": "web", "limit": "2"},
 		},
 		{
 			name:      "get_session",
 			tool:      "get_session",
-			arguments: map[string]any{"session": "7392"},
+			arguments: map[string]any{"target": "https://staging.disbug.us/abb/projects/2/sessions/5/"},
 			handler: e2eBackendHandler(t, map[string]http.HandlerFunc{
-				"/api/sessions/7392/": func(w http.ResponseWriter, _ *http.Request) {
+				"/api/teams/abb/projects/2/sessions/5/": func(w http.ResponseWriter, _ *http.Request) {
 					writeJSON(t, w, `{
 						"id":7392,
+						"team_slug":"abb",
+						"project_session_number":5,
 						"status":"open",
-						"project":{"slug":"web","name":"Web"},
+						"project":{"id":2,"slug":"2","name":"Web"},
 						"reporter":{"email":"r@example.test","display_name":"Reporter"},
+						"report_url":"https://staging.disbug.us/abb/projects/2/sessions/5/",
 						"url":"https://example.test/checkout",
 						"updated_at":"2026-05-01T00:00:00Z",
 						"pins":[{"id":44,"number":2,"feedback":"button missing","url":null,"selector":null,"element_info":{},"metadata":{}}]
 					}`)
 				},
 			}),
-			wantText:  []string{`"id":7392`, `"pins":[`, "button missing"},
-			wantPaths: []string{"/api/sessions/7392/"},
+			wantText:  []string{`"report_url":"https://staging.disbug.us/abb/projects/2/sessions/5/"`, `"pins":[`, `"number":2`, "button missing"},
+			wantPaths: []string{"/api/teams/abb/projects/2/sessions/5/"},
 		},
 		{
 			name:      "get_pin",
 			tool:      "get_pin",
-			arguments: map[string]any{"pin": "7392.2", "fields": []string{"console", "network"}},
+			arguments: map[string]any{"pin": "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2", "fields": []string{"console", "network"}},
 			handler: e2eBackendHandler(t, map[string]http.HandlerFunc{
-				"/api/sessions/7392/pins/by-number/2/": func(w http.ResponseWriter, _ *http.Request) {
+				"/api/teams/abb/projects/2/sessions/5/pins/by-number/2/": func(w http.ResponseWriter, _ *http.Request) {
 					writeJSON(t, w, `{
 						"id":44,
 						"number":2,
@@ -190,21 +196,21 @@ func TestMCPSubprocessToolsCall(t *testing.T) {
 				},
 			}),
 			wantText:   []string{`"number":2`, "button still broken", "boom"},
-			wantPaths:  []string{"/api/sessions/7392/pins/by-number/2/"},
+			wantPaths:  []string{"/api/teams/abb/projects/2/sessions/5/pins/by-number/2/"},
 			wantQuery:  map[string]string{"fields": "console_logs,network_logs"},
-			pathPrefix: "/api/sessions/7392/pins/by-number/2/",
+			pathPrefix: "/api/teams/abb/projects/2/sessions/5/pins/by-number/2/",
 		},
 		{
 			name: "get_pins_partial_failure",
 			tool: "get_pins",
 			arguments: map[string]any{
 				"items": []map[string]any{
-					{"pin": "7392.2", "fields": []string{"console"}},
-					{"pin": "7392.3", "fields": []string{"console"}},
+					{"pin": "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2", "fields": []string{"console"}},
+					{"pin": "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=3", "fields": []string{"console"}},
 				},
 			},
 			handler: e2eBackendHandler(t, map[string]http.HandlerFunc{
-				"/api/sessions/7392/pins/by-number/2/": func(w http.ResponseWriter, _ *http.Request) {
+				"/api/teams/abb/projects/2/sessions/5/pins/by-number/2/": func(w http.ResponseWriter, _ *http.Request) {
 					writeJSON(t, w, `{
 						"id":44,
 						"number":2,
@@ -216,14 +222,14 @@ func TestMCPSubprocessToolsCall(t *testing.T) {
 						"console":[{"message":"boom"}]
 					}`)
 				},
-				"/api/sessions/7392/pins/by-number/3/": func(w http.ResponseWriter, _ *http.Request) {
+				"/api/teams/abb/projects/2/sessions/5/pins/by-number/3/": func(w http.ResponseWriter, _ *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusNotFound)
 					_, _ = io.WriteString(w, `{"code":"not_found","detail":"pin missing","request_id":"req-missing"}`)
 				},
 			}),
 			wantText:  []string{`"pins":[`, "button still broken", `"errors":[`, "pin missing", "req-missing"},
-			wantPaths: []string{"/api/sessions/7392/pins/by-number/2/", "/api/sessions/7392/pins/by-number/3/"},
+			wantPaths: []string{"/api/teams/abb/projects/2/sessions/5/pins/by-number/2/", "/api/teams/abb/projects/2/sessions/5/pins/by-number/3/"},
 		},
 		{
 			name:      "search_sessions",
@@ -234,7 +240,10 @@ func TestMCPSubprocessToolsCall(t *testing.T) {
 					writeJSON(t, w, `{
 						"results":[{
 							"id":7392,
-							"project":{"slug":"web","name":"Web"},
+							"team_slug":"abb",
+							"project":{"id":2,"slug":"2","name":"Web"},
+							"project_session_number":5,
+							"report_url":"https://staging.disbug.us/abb/projects/2/sessions/5/",
 							"url":"https://example.test/checkout",
 							"status":"open",
 							"pin_count":2,
@@ -247,7 +256,7 @@ func TestMCPSubprocessToolsCall(t *testing.T) {
 					}`)
 				},
 			}),
-			wantText:  []string{`"id":7392`, `"total":1`, "checkout button broken"},
+			wantText:  []string{`"report_url":"https://staging.disbug.us/abb/projects/2/sessions/5/"`, `"total":1`, "checkout button broken"},
 			wantPaths: []string{"/api/search/"},
 			wantQuery: map[string]string{"q": "checkout", "scope": "sessions", "limit": "3"},
 		},
@@ -262,7 +271,10 @@ func TestMCPSubprocessToolsCall(t *testing.T) {
 							"pin":{"id":44,"number":2,"feedback":"checkout button broken","url":null,"selector":"#checkout","element_info":{},"metadata":{}},
 							"session":{
 								"id":7392,
-								"project":{"slug":"web","name":"Web"},
+								"team_slug":"abb",
+								"project":{"id":2,"slug":"2","name":"Web"},
+								"project_session_number":5,
+								"report_url":"https://staging.disbug.us/abb/projects/2/sessions/5/",
 								"url":"https://example.test/checkout",
 								"status":"open",
 								"pin_count":2,
@@ -592,7 +604,7 @@ func e2eBackendHandler(t *testing.T, routes map[string]http.HandlerFunc) http.Ha
 				"team":"T",
 				"team_slug":"t",
 				"api_version":"1.0.0",
-				"capabilities":["search","pin_field_selection","pin_by_number"]
+				"capabilities":["search","pin_field_selection","scoped_pin_lookup"]
 			}`)
 			return
 		}

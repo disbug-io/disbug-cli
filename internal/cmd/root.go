@@ -27,9 +27,9 @@ type CLI struct {
 	Version kong.VersionFlag `name:"version" help:"Show version."`
 
 	Sessions SessionsCmd `cmd:"" name:"sessions" help:"List sessions."`
-	Session  SessionCmd  `cmd:"" name:"session" help:"Show a session."`
-	Pin      PinCmd      `cmd:"" name:"pin" help:"Show a pin."`
-	Pins     PinsCmd     `cmd:"" name:"pins" help:"List pins."`
+	Session  SessionCmd  `cmd:"" name:"session" help:"Show a session by report URL."`
+	Pin      PinCmd      `cmd:"" name:"pin" help:"Show a pin by report URL."`
+	Pins     PinsCmd     `cmd:"" name:"pins" help:"Fetch pins by report URL."`
 	Search   SearchCmd   `cmd:"" name:"search" help:"Search Disbug data."`
 	Watch    WatchCmd    `cmd:"" name:"watch" help:"Stream new sessions as events."`
 
