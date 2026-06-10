@@ -67,7 +67,7 @@ func ParsePin(arg string) (PinRef, error) {
 		return PinRef{}, fmt.Errorf("invalid pin ref %q: missing pin query parameter", arg)
 	}
 
-	return PinRef{Session: parsedURL.Session, Pin: parsedURL.Pin}, nil
+	return PinRef(parsedURL), nil
 }
 
 // ParsePinFetch parses a pin reference with an optional colon-delimited field override.
