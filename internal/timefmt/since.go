@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// MaxSince is the maximum accepted --since duration for session backfills.
 const MaxSince = 8760 * time.Hour
 
 var sincePattern = regexp.MustCompile(`^([0-9]+(\.[0-9]+)?(s|m|h))+$`)

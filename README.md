@@ -29,8 +29,8 @@ Grab a binary for your OS/arch from [Releases](https://github.com/disbug-io/disb
 disbug login                 # opens a browser; saves token to <UserConfigDir>/disbug/default.json
 disbug whoami                # confirms identity + capabilities
 disbug sessions --status open
-disbug session 7392
-disbug pin 7392.2 --fields console,network
+disbug session https://app.disbug.io/acme/projects/2/sessions/5/
+disbug pin 'https://app.disbug.io/acme/projects/2/sessions/5/?pin=1' --fields console,network
 ```
 
 ### Use as an MCP server

@@ -19,7 +19,10 @@ func TestListSessions_InProcess(t *testing.T) {
 		_, _ = io.WriteString(w, `{
 			"results":[{
 				"id":7392,
-				"project":{"slug":"web","name":"Web"},
+				"team_slug":"abb",
+				"project":{"id":2,"slug":"2","name":"Web"},
+				"project_session_number":5,
+				"report_url":"https://staging.disbug.us/abb/projects/2/sessions/5/",
 				"url":"https://example.test",
 				"status":"open",
 				"pin_count":2,
@@ -50,8 +53,11 @@ func TestListSessions_InProcess(t *testing.T) {
 		t.Fatalf("list_sessions IsError = true, want false: %#v", res.Content)
 	}
 	text := firstTextContent(t, res)
-	if !strings.Contains(text, `"id":7392`) {
-		t.Fatalf("list_sessions content = %q, want session id", text)
+	if strings.Contains(text, `"id":7392`) {
+		t.Fatalf("list_sessions content = %q, should not expose session database id", text)
+	}
+	if !strings.Contains(text, `"report_url":"https://staging.disbug.us/abb/projects/2/sessions/5/"`) {
+		t.Fatalf("list_sessions content = %q, want report URL", text)
 	}
 	if !strings.Contains(text, `"status":"open"`) {
 		t.Fatalf("list_sessions content = %q, want compact JSON status", text)

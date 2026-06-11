@@ -102,8 +102,11 @@ func TestSearchPinsScope(t *testing.T) {
 	if !searchCalled {
 		t.Fatal("search endpoint was not called")
 	}
-	if got := stdout; !bytes.Contains([]byte(got), []byte(`"id":456`)) {
-		t.Fatalf("stdout = %q, want pin id", got)
+	if got := stdout; bytes.Contains([]byte(got), []byte(`"id":456`)) {
+		t.Fatalf("stdout = %q, should not expose pin database id", got)
+	}
+	if got := stdout; !bytes.Contains([]byte(got), []byte(`"number":2`)) {
+		t.Fatalf("stdout = %q, want pin number", got)
 	}
 	if got := stderr; got != "" {
 		t.Fatalf("stderr = %q, want empty", got)

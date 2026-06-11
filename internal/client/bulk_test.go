@@ -17,17 +17,17 @@ import (
 func TestGetPinsBulkPartialFailureAndPreservesOrder(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/api/sessions/10/pins/by-number/1/":
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/1/":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = io.WriteString(w, `{"id":101,"number":1,"feedback":"one"}`)
-		case "/api/sessions/10/pins/by-number/2/":
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/2/":
 			w.Header().Set("X-Request-ID", "req-2")
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = io.WriteString(w, `{"code":"not_found","detail":"pin 2 missing","request_id":"req-body-2"}`)
-		case "/api/sessions/10/pins/by-number/3/":
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/3/":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = io.WriteString(w, `{"id":103,"number":3,"feedback":"three"}`)
-		case "/api/sessions/10/pins/by-number/4/":
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/4/":
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = io.WriteString(w, `{"code":"internal_error","detail":"pin 4 failed","request_id":"req-4"}`)
 		default:
@@ -37,12 +37,13 @@ func TestGetPinsBulkPartialFailureAndPreservesOrder(t *testing.T) {
 	t.Cleanup(server.Close)
 	t.Setenv("DISBUG_BULK_CONCURRENCY", "4")
 	c := New(server.URL, "t", "test", nil, server.Client(), nil)
+	sessionRef := ref.SessionRef{TeamSlug: "abb", ProjectID: 2, SessionNumber: 5}
 
 	result := c.GetPinsBulk(context.Background(), []ref.PinFetch{
-		{Pin: ref.PinRef{Session: 10, Pin: 1}, Fields: []string{"console"}},
-		{Pin: ref.PinRef{Session: 10, Pin: 2}, Fields: []string{"network"}},
-		{Pin: ref.PinRef{Session: 10, Pin: 3}, Fields: []string{"all"}},
-		{Pin: ref.PinRef{Session: 10, Pin: 4}, Fields: []string{"events"}},
+		{Pin: ref.PinRef{Session: sessionRef, Pin: 1}, Fields: []string{"console"}},
+		{Pin: ref.PinRef{Session: sessionRef, Pin: 2}, Fields: []string{"network"}},
+		{Pin: ref.PinRef{Session: sessionRef, Pin: 3}, Fields: []string{"all"}},
+		{Pin: ref.PinRef{Session: sessionRef, Pin: 4}, Fields: []string{"events"}},
 	})
 
 	if got, want := len(result.Pins), 2; got != want {
@@ -57,7 +58,7 @@ func TestGetPinsBulkPartialFailureAndPreservesOrder(t *testing.T) {
 	if got, want := len(result.Errors), 2; got != want {
 		t.Fatalf("len(Errors) = %d, want %d", got, want)
 	}
-	if got, want := result.Errors[0].Pin, "10.2"; got != want {
+	if got, want := result.Errors[0].Pin, "abb/projects/2/sessions/5?pin=2"; got != want {
 		t.Fatalf("Errors[0].Pin = %q, want %q", got, want)
 	}
 	if got, want := result.Errors[0].Code, "not_found"; got != want {
@@ -66,7 +67,7 @@ func TestGetPinsBulkPartialFailureAndPreservesOrder(t *testing.T) {
 	if got, want := result.Errors[0].RequestID, "req-body-2"; got != want {
 		t.Fatalf("Errors[0].RequestID = %q, want %q", got, want)
 	}
-	if got, want := result.Errors[1].Pin, "10.4"; got != want {
+	if got, want := result.Errors[1].Pin, "abb/projects/2/sessions/5?pin=4"; got != want {
 		t.Fatalf("Errors[1].Pin = %q, want %q", got, want)
 	}
 	if result.AllFailed() {
@@ -79,10 +80,11 @@ func TestGetPinsBulkAllFailed(t *testing.T) {
 		return nil, fmt.Errorf("dial %s failed", req.URL.Path)
 	}), nil)
 	t.Setenv("DISBUG_BULK_CONCURRENCY", "2")
+	sessionRef := ref.SessionRef{TeamSlug: "abb", ProjectID: 2, SessionNumber: 5}
 
 	result := c.GetPinsBulk(context.Background(), []ref.PinFetch{
-		{Pin: ref.PinRef{Session: 10, Pin: 1}, Fields: []string{"console"}},
-		{Pin: ref.PinRef{Session: 10, Pin: 2}, Fields: []string{"network"}},
+		{Pin: ref.PinRef{Session: sessionRef, Pin: 1}, Fields: []string{"console"}},
+		{Pin: ref.PinRef{Session: sessionRef, Pin: 2}, Fields: []string{"network"}},
 	})
 
 	if got, want := len(result.Pins), 0; got != want {
@@ -106,10 +108,11 @@ func TestGetPinsBulkPreCanceledContextReportsEveryPin(t *testing.T) {
 	}), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
+	sessionRef := ref.SessionRef{TeamSlug: "abb", ProjectID: 2, SessionNumber: 5}
 
 	result := c.GetPinsBulk(ctx, []ref.PinFetch{
-		{Pin: ref.PinRef{Session: 10, Pin: 1}, Fields: []string{"all"}},
-		{Pin: ref.PinRef{Session: 10, Pin: 2}, Fields: []string{"all"}},
+		{Pin: ref.PinRef{Session: sessionRef, Pin: 1}, Fields: []string{"all"}},
+		{Pin: ref.PinRef{Session: sessionRef, Pin: 2}, Fields: []string{"all"}},
 	})
 
 	if got, want := len(result.Pins), 0; got != want {
@@ -118,10 +121,10 @@ func TestGetPinsBulkPreCanceledContextReportsEveryPin(t *testing.T) {
 	if got, want := len(result.Errors), 2; got != want {
 		t.Fatalf("len(Errors) = %d, want %d", got, want)
 	}
-	if got, want := result.Errors[0].Pin, "10.1"; got != want {
+	if got, want := result.Errors[0].Pin, "abb/projects/2/sessions/5?pin=1"; got != want {
 		t.Fatalf("Errors[0].Pin = %q, want %q", got, want)
 	}
-	if got, want := result.Errors[1].Pin, "10.2"; got != want {
+	if got, want := result.Errors[1].Pin, "abb/projects/2/sessions/5?pin=2"; got != want {
 		t.Fatalf("Errors[1].Pin = %q, want %q", got, want)
 	}
 	for i, item := range result.Errors {
@@ -154,12 +157,13 @@ func TestGetPinsBulkCancellationBeforeAllDispatchReportsUndispatchedPins(t *test
 
 	c := New(server.URL, "t", "test", nil, server.Client(), nil)
 	ctx, cancel := context.WithCancel(context.Background())
+	sessionRef := ref.SessionRef{TeamSlug: "abb", ProjectID: 2, SessionNumber: 5}
 	done := make(chan BulkResult, 1)
 	go func() {
 		done <- c.GetPinsBulk(ctx, []ref.PinFetch{
-			{Pin: ref.PinRef{Session: 10, Pin: 1}, Fields: []string{"all"}},
-			{Pin: ref.PinRef{Session: 10, Pin: 2}, Fields: []string{"all"}},
-			{Pin: ref.PinRef{Session: 10, Pin: 3}, Fields: []string{"all"}},
+			{Pin: ref.PinRef{Session: sessionRef, Pin: 1}, Fields: []string{"all"}},
+			{Pin: ref.PinRef{Session: sessionRef, Pin: 2}, Fields: []string{"all"}},
+			{Pin: ref.PinRef{Session: sessionRef, Pin: 3}, Fields: []string{"all"}},
 		})
 	}()
 
@@ -173,7 +177,11 @@ func TestGetPinsBulkCancellationBeforeAllDispatchReportsUndispatchedPins(t *test
 	if got, want := len(result.Errors), 3; got != want {
 		t.Fatalf("len(Errors) = %d, want %d", got, want)
 	}
-	for i, wantPin := range []string{"10.1", "10.2", "10.3"} {
+	for i, wantPin := range []string{
+		"abb/projects/2/sessions/5?pin=1",
+		"abb/projects/2/sessions/5?pin=2",
+		"abb/projects/2/sessions/5?pin=3",
+	} {
 		if got := result.Errors[i].Pin; got != wantPin {
 			t.Fatalf("Errors[%d].Pin = %q, want %q", i, got, wantPin)
 		}
@@ -255,11 +263,12 @@ func TestGetPinsBulkConcurrencyCap(t *testing.T) {
 
 	c := New(server.URL, "t", "test", nil, server.Client(), nil)
 	ctx, cancel := context.WithCancel(context.Background())
+	sessionRef := ref.SessionRef{TeamSlug: "abb", ProjectID: 2, SessionNumber: 5}
 	items := []ref.PinFetch{
-		{Pin: ref.PinRef{Session: 10, Pin: 1}, Fields: []string{"all"}},
-		{Pin: ref.PinRef{Session: 10, Pin: 2}, Fields: []string{"all"}},
-		{Pin: ref.PinRef{Session: 10, Pin: 3}, Fields: []string{"all"}},
-		{Pin: ref.PinRef{Session: 10, Pin: 4}, Fields: []string{"all"}},
+		{Pin: ref.PinRef{Session: sessionRef, Pin: 1}, Fields: []string{"all"}},
+		{Pin: ref.PinRef{Session: sessionRef, Pin: 2}, Fields: []string{"all"}},
+		{Pin: ref.PinRef{Session: sessionRef, Pin: 3}, Fields: []string{"all"}},
+		{Pin: ref.PinRef{Session: sessionRef, Pin: 4}, Fields: []string{"all"}},
 	}
 	done := make(chan BulkResult, 1)
 	go func() {

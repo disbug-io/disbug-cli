@@ -127,14 +127,16 @@ paths:
                 $ref: "#/components/schemas/ListSessionsResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
-  /api/sessions/{id}/:
+  /api/teams/{team_slug}/projects/{project_id}/sessions/{session_number}/:
     get:
       operationId: GetSession
       summary: Get a session detail.
       security:
         - bearerAuth: []
       parameters:
-        - $ref: "#/components/parameters/SessionID"
+        - $ref: "#/components/parameters/TeamSlug"
+        - $ref: "#/components/parameters/ProjectID"
+        - $ref: "#/components/parameters/SessionNumber"
       responses:
         "200":
           description: Session detail.
@@ -148,65 +150,17 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
-  /api/sessions/{id}/pins/by-number/{n}/:
+  /api/teams/{team_slug}/projects/{project_id}/sessions/{session_number}/pins/by-number/{pin_number}/:
     get:
       operationId: GetPinByNumber
       summary: Get a pin by its display number within a session.
       security:
         - bearerAuth: []
       parameters:
-        - $ref: "#/components/parameters/SessionID"
-        - name: n
-          in: path
-          required: true
-          description: Pin number within the session.
-          schema:
-            type: integer
-            minimum: 1
-        - name: fields
-          in: query
-          required: false
-          description: Optional expanded fields to include.
-          schema:
-            type: string
-            enum:
-              - screenshot
-              - console_logs
-              - network_logs
-              - user_events
-              - session_replay
-              - voice_note
-              - video_recording
-      responses:
-        "200":
-          description: Pin detail.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PinFull"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/sessions/{id}/pins/{pid}/:
-    get:
-      operationId: GetPin
-      summary: Get a pin by its backend identifier.
-      security:
-        - bearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/SessionID"
-        - name: pid
-          in: path
-          required: true
-          description: Pin identifier.
-          schema:
-            type: integer
-            minimum: 1
+        - $ref: "#/components/parameters/TeamSlug"
+        - $ref: "#/components/parameters/ProjectID"
+        - $ref: "#/components/parameters/SessionNumber"
+        - $ref: "#/components/parameters/PinNumber"
         - name: fields
           in: query
           required: false
@@ -243,11 +197,34 @@ components:
       scheme: bearer
       bearerFormat: token
   parameters:
-    SessionID:
-      name: id
+    TeamSlug:
+      name: team_slug
       in: path
       required: true
-      description: Session identifier.
+      description: Team slug from the report URL.
+      schema:
+        type: string
+    ProjectID:
+      name: project_id
+      in: path
+      required: true
+      description: Project identifier from the report URL.
+      schema:
+        type: integer
+        minimum: 1
+    SessionNumber:
+      name: session_number
+      in: path
+      required: true
+      description: Project-scoped session number from the report URL.
+      schema:
+        type: integer
+        minimum: 1
+    PinNumber:
+      name: pin_number
+      in: path
+      required: true
+      description: Pin number within the session.
       schema:
         type: integer
         minimum: 1
@@ -335,7 +312,8 @@ components:
             enum:
               - search
               - pin_field_selection
-              - pin_by_number
+              - scoped_session_lookup
+              - scoped_pin_lookup
     Project:
       type: object
       required:
@@ -380,8 +358,10 @@ components:
     SessionSummary:
       type: object
       required:
-        - id
+        - team_slug
         - project
+        - project_session_number
+        - report_url
         - url
         - status
         - pin_count
@@ -390,13 +370,18 @@ components:
         - updated_at
         - free_tier_locked
       properties:
-        id:
-          type: integer
-          minimum: 1
+        team_slug:
+          type: string
         project:
           allOf:
             - $ref: "#/components/schemas/Project"
           nullable: true
+        project_session_number:
+          type: integer
+          minimum: 1
+        report_url:
+          type: string
+          format: uri
         url:
           type: string
           format: uri
@@ -424,17 +409,18 @@ components:
     SessionDetail:
       type: object
       required:
-        - id
+        - team_slug
         - status
         - project
+        - project_session_number
+        - report_url
         - reporter
         - url
         - updated_at
         - pins
       properties:
-        id:
-          type: integer
-          minimum: 1
+        team_slug:
+          type: string
         status:
           type: string
           enum:
@@ -445,6 +431,12 @@ components:
           allOf:
             - $ref: "#/components/schemas/Project"
           nullable: true
+        project_session_number:
+          type: integer
+          minimum: 1
+        report_url:
+          type: string
+          format: uri
         reporter:
           allOf:
             - $ref: "#/components/schemas/Reporter"
@@ -462,7 +454,6 @@ components:
     PinLite:
       type: object
       required:
-        - id
         - number
         - feedback
         - url
@@ -470,9 +461,6 @@ components:
         - element_info
         - metadata
       properties:
-        id:
-          type: integer
-          minimum: 1
         number:
           type: integer
           minimum: 1

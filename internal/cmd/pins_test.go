@@ -26,10 +26,10 @@ func TestPinsPartialFailureReturnsSuccessWithBulkErrors(t *testing.T) {
 
 		switch r.URL.Path {
 		case "/api/me/":
-			writePinCapabilities(w, "pin_field_selection", "pin_by_number")
-		case "/api/sessions/7392/pins/by-number/2/":
+			writePinCapabilities(w, "pin_field_selection", "scoped_pin_lookup")
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/2/":
 			writePinJSON(w, 5827, 2)
-		case "/api/sessions/7392/pins/by-number/99/":
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/99/":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = io.WriteString(w, `{"code":"not_found","detail":"x"}`)
@@ -40,17 +40,17 @@ func TestPinsPartialFailureReturnsSuccessWithBulkErrors(t *testing.T) {
 	t.Cleanup(srv.Close)
 	setupClient(t, srv)
 
-	stdout, stderr, err := executePins(t, "pins", "7392.2", "7392.99")
+	stdout, stderr, err := executePins(t, "pins", "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2", "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=99")
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}
-	if got, want := calls["/api/sessions/7392/pins/by-number/2/"], 1; got != want {
+	if got, want := calls["/api/teams/abb/projects/2/sessions/5/pins/by-number/2/"], 1; got != want {
 		t.Fatalf("pin 2 calls = %d, want %d", got, want)
 	}
-	if got, want := calls["/api/sessions/7392/pins/by-number/99/"], 1; got != want {
+	if got, want := calls["/api/teams/abb/projects/2/sessions/5/pins/by-number/99/"], 1; got != want {
 		t.Fatalf("pin 99 calls = %d, want %d", got, want)
 	}
-	if !bytes.Contains([]byte(stdout), []byte(`"pin":"7392.99"`)) {
+	if !bytes.Contains([]byte(stdout), []byte(`"pin":"abb/projects/2/sessions/5?pin=99"`)) {
 		t.Fatalf("stdout = %q, want failed pin ref", stdout)
 	}
 	if !bytes.Contains([]byte(stdout), []byte(`"error_code":"not_found"`)) {
@@ -65,8 +65,8 @@ func TestPinsAllFailedReturnsFirstFailureExitCodeAndWritesJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/me/":
-			writePinCapabilities(w, "pin_field_selection", "pin_by_number")
-		case "/api/sessions/7392/pins/by-number/2/", "/api/sessions/7392/pins/by-number/3/":
+			writePinCapabilities(w, "pin_field_selection", "scoped_pin_lookup")
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/2/", "/api/teams/abb/projects/2/sessions/5/pins/by-number/3/":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = io.WriteString(w, `{"code":"not_found","detail":"x"}`)
@@ -77,7 +77,7 @@ func TestPinsAllFailedReturnsFirstFailureExitCodeAndWritesJSON(t *testing.T) {
 	t.Cleanup(srv.Close)
 	setupClient(t, srv)
 
-	stdout, _, err := executePins(t, "pins", "7392.2", "7392.3")
+	stdout, _, err := executePins(t, "pins", "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2", "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=3")
 
 	if err == nil {
 		t.Fatal("Execute() error = nil, want all-failed error")
@@ -85,7 +85,7 @@ func TestPinsAllFailedReturnsFirstFailureExitCodeAndWritesJSON(t *testing.T) {
 	if got, want := ExitCode(err), 6; got != want {
 		t.Fatalf("ExitCode() = %d, want %d", got, want)
 	}
-	if !bytes.Contains([]byte(stdout), []byte(`"pin":"7392.2"`)) {
+	if !bytes.Contains([]byte(stdout), []byte(`"pin":"abb/projects/2/sessions/5?pin=2"`)) {
 		t.Fatalf("stdout = %q, want first bulk error", stdout)
 	}
 	if !bytes.Contains([]byte(stdout), []byte(`"error_code":"not_found"`)) {
@@ -97,8 +97,8 @@ func TestPinsAllFailedNetworkErrorReturnsCleanExitCodeAndWritesJSON(t *testing.T
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/me/":
-			writePinCapabilities(w, "pin_field_selection", "pin_by_number")
-		case "/api/sessions/7392/pins/by-number/2/", "/api/sessions/7392/pins/by-number/3/":
+			writePinCapabilities(w, "pin_field_selection", "scoped_pin_lookup")
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/2/", "/api/teams/abb/projects/2/sessions/5/pins/by-number/3/":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = io.WriteString(
@@ -112,7 +112,7 @@ func TestPinsAllFailedNetworkErrorReturnsCleanExitCodeAndWritesJSON(t *testing.T
 	t.Cleanup(srv.Close)
 	setupClient(t, srv)
 
-	stdout, stderr, err := executePins(t, "pins", "7392.2", "7392.3")
+	stdout, stderr, err := executePins(t, "pins", "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2", "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=3")
 
 	if err == nil {
 		t.Fatal("Execute() error = nil, want all-failed network error")
@@ -159,7 +159,7 @@ func TestPinsBadDefaultFieldsReturnsUsageAndDoesNotCallHTTP(t *testing.T) {
 	t.Cleanup(srv.Close)
 	setupClient(t, srv)
 
-	stdout, _, err := executePins(t, "pins", "--fields", "bogus", "7392.2")
+	stdout, _, err := executePins(t, "pins", "--fields", "bogus", "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2")
 
 	if err == nil {
 		t.Fatal("Execute() error = nil, want usage error")
@@ -183,8 +183,8 @@ func TestPinsStyleAFields(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/me/":
-			writePinCapabilities(w, "pin_field_selection", "pin_by_number")
-		case "/api/sessions/7392/pins/by-number/2/", "/api/sessions/7392/pins/by-number/3/", "/api/sessions/7392/pins/by-number/4/":
+			writePinCapabilities(w, "pin_field_selection", "scoped_pin_lookup")
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/2/", "/api/teams/abb/projects/2/sessions/5/pins/by-number/3/", "/api/teams/abb/projects/2/sessions/5/pins/by-number/4/":
 			queriesMu.Lock()
 			queries[r.URL.Path] = r.URL.Query().Get("fields")
 			queriesMu.Unlock()
@@ -196,17 +196,23 @@ func TestPinsStyleAFields(t *testing.T) {
 	t.Cleanup(srv.Close)
 	setupClient(t, srv)
 
-	_, stderr, err := executePins(t, "pins", "7392.2:console", "7392.3:network,events", "7392.4")
+	_, stderr, err := executePins(
+		t,
+		"pins",
+		"https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2&fields=console",
+		"https://staging.disbug.us/abb/projects/2/sessions/5/?pin=3&fields=network,events",
+		"https://staging.disbug.us/abb/projects/2/sessions/5/?pin=4",
+	)
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}
-	if got, want := queries["/api/sessions/7392/pins/by-number/2/"], "console_logs"; got != want {
+	if got, want := queries["/api/teams/abb/projects/2/sessions/5/pins/by-number/2/"], "console_logs"; got != want {
 		t.Fatalf("pin 2 fields = %q, want %q", got, want)
 	}
-	if got, want := queries["/api/sessions/7392/pins/by-number/3/"], "network_logs,user_events"; got != want {
+	if got, want := queries["/api/teams/abb/projects/2/sessions/5/pins/by-number/3/"], "network_logs,user_events"; got != want {
 		t.Fatalf("pin 3 fields = %q, want %q", got, want)
 	}
-	if got, want := queries["/api/sessions/7392/pins/by-number/4/"], ""; got != want {
+	if got, want := queries["/api/teams/abb/projects/2/sessions/5/pins/by-number/4/"], ""; got != want {
 		t.Fatalf("pin 4 fields = %q, want omitted", got)
 	}
 }
@@ -218,8 +224,8 @@ func TestPinsDuplicateRefsAreFetchedOnceWithFieldUnion(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/me/":
-			writePinCapabilities(w, "pin_field_selection", "pin_by_number")
-		case "/api/sessions/7392/pins/by-number/2/":
+			writePinCapabilities(w, "pin_field_selection", "scoped_pin_lookup")
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/2/":
 			pinCalls++
 			fields = r.URL.Query().Get("fields")
 			writePinJSON(w, 5827, 2)
@@ -230,7 +236,12 @@ func TestPinsDuplicateRefsAreFetchedOnceWithFieldUnion(t *testing.T) {
 	t.Cleanup(srv.Close)
 	setupClient(t, srv)
 
-	_, stderr, err := executePins(t, "pins", "7392.2:console", "7392.2:network")
+	_, stderr, err := executePins(
+		t,
+		"pins",
+		"https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2&fields=console",
+		"https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2&fields=network",
+	)
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}
@@ -248,7 +259,7 @@ func TestPinsMissingCapabilityReturnsUserFacingErrorAndDoesNotCallPinEndpoint(t 
 		switch r.URL.Path {
 		case "/api/me/":
 			writePinCapabilities(w, "pin_field_selection")
-		case "/api/sessions/7392/pins/by-number/2/":
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/2/":
 			pinCalled = true
 			w.WriteHeader(http.StatusInternalServerError)
 		default:
@@ -258,7 +269,7 @@ func TestPinsMissingCapabilityReturnsUserFacingErrorAndDoesNotCallPinEndpoint(t 
 	t.Cleanup(srv.Close)
 	setupClient(t, srv)
 
-	stdout, stderr, err := executePins(t, "pins", "7392.2")
+	stdout, stderr, err := executePins(t, "pins", "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2")
 
 	if err == nil {
 		t.Fatal("Execute() error = nil, want missing capability error")
@@ -267,7 +278,7 @@ func TestPinsMissingCapabilityReturnsUserFacingErrorAndDoesNotCallPinEndpoint(t 
 	if !errors.As(err, &userErr) {
 		t.Fatalf("Execute() error = %T, want errfmt.UserFacingError", err)
 	}
-	if !strings.Contains(stderr, `"pin_by_number"`) {
+	if !strings.Contains(stderr, `"scoped_pin_lookup"`) {
 		t.Fatalf("stderr = %q, want missing capability name", stderr)
 	}
 	if pinCalled {
@@ -282,8 +293,8 @@ func TestPinsPrettyOutput(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/me/":
-			writePinCapabilities(w, "pin_field_selection", "pin_by_number")
-		case "/api/sessions/7392/pins/by-number/2/":
+			writePinCapabilities(w, "pin_field_selection", "scoped_pin_lookup")
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/2/":
 			writePinJSON(w, 5827, 2)
 		default:
 			t.Fatalf("unexpected path %q", r.URL.Path)
@@ -292,15 +303,18 @@ func TestPinsPrettyOutput(t *testing.T) {
 	t.Cleanup(srv.Close)
 	setupClient(t, srv)
 
-	stdout, stderr, err := executePins(t, "--pretty", "pins", "7392.2")
+	stdout, stderr, err := executePins(t, "--pretty", "pins", "https://staging.disbug.us/abb/projects/2/sessions/5/?pin=2")
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}
 	if got := stderr; got != "" {
 		t.Fatalf("stderr = %q, want empty", got)
 	}
-	if got := stdout; !bytes.Contains([]byte(got), []byte("{\n  \"pins\": [\n    {\n      \"id\": 5827")) {
+	if got := stdout; !bytes.Contains([]byte(got), []byte("{\n  \"pins\": [\n    {\n      \"number\": 2")) {
 		t.Fatalf("stdout = %q, want indented JSON", got)
+	}
+	if got := stdout; bytes.Contains([]byte(got), []byte(`"id": 5827`)) {
+		t.Fatalf("stdout = %q, should not expose pin database id", got)
 	}
 }
 

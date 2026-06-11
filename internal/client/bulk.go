@@ -152,7 +152,7 @@ func bulkConcurrency() int {
 
 func bulkErrItem(pin ref.PinRef, err error) BulkErrItem {
 	item := BulkErrItem{
-		Pin:     fmt.Sprintf("%d.%d", pin.Session, pin.Pin),
+		Pin:     pin.RefString(),
 		Code:    "unknown_error",
 		Message: errfmt.Format(err),
 	}

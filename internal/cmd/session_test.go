@@ -13,18 +13,21 @@ import (
 )
 
 func TestSessionDetailSuccess(t *testing.T) {
+	reportURL := "https://staging.disbug.us/abb/projects/2/sessions/5/"
 	var called bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
-		if got, want := r.URL.Path, "/api/sessions/7392/"; got != want {
+		if got, want := r.URL.Path, "/api/teams/abb/projects/2/sessions/5/"; got != want {
 			t.Fatalf("path = %q, want %q", got, want)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{
 			"id":7392,
+			"team_slug":"abb",
+			"project_session_number":5,
 			"status":"open",
-			"project":{"slug":"web","name":"Website"},
+			"project":{"id":2,"slug":"2","name":"Website"},
 			"reporter":{"email":"r@example.test","display_name":"Reporter"},
 			"url":"https://example.test/page",
 			"updated_at":"2026-05-01T12:00:00Z",
@@ -34,7 +37,7 @@ func TestSessionDetailSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 	setupClient(t, srv)
 
-	stdout, stderr, err := executeSession(t, "session", "7392")
+	stdout, stderr, err := executeSession(t, "session", reportURL)
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}
@@ -44,8 +47,11 @@ func TestSessionDetailSuccess(t *testing.T) {
 	if got := stderr; got != "" {
 		t.Fatalf("stderr = %q, want empty", got)
 	}
-	if got := stdout; !bytes.Contains([]byte(got), []byte(`"id":7392`)) {
-		t.Fatalf("stdout = %q, want session id", got)
+	if got := stdout; bytes.Contains([]byte(got), []byte(`"id":7392`)) {
+		t.Fatalf("stdout = %q, should not expose session database id", got)
+	}
+	if got := stdout; !bytes.Contains([]byte(got), []byte(`"project_session_number":5`)) {
+		t.Fatalf("stdout = %q, want session number", got)
 	}
 }
 
@@ -58,7 +64,7 @@ func TestSessionBadRefReturnsUsageAndDoesNotCallHTTP(t *testing.T) {
 	t.Cleanup(srv.Close)
 	setupClient(t, srv)
 
-	stdout, _, err := executeSession(t, "session", "abc")
+	stdout, _, err := executeSession(t, "session", "7392")
 
 	if err == nil {
 		t.Fatal("Execute() error = nil, want usage error")
@@ -79,6 +85,7 @@ func TestSessionBadRefReturnsUsageAndDoesNotCallHTTP(t *testing.T) {
 }
 
 func TestSessionPrettyOutput(t *testing.T) {
+	reportURL := "https://staging.disbug.us/abb/projects/2/sessions/5/"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{
@@ -94,15 +101,18 @@ func TestSessionPrettyOutput(t *testing.T) {
 	t.Cleanup(srv.Close)
 	setupClient(t, srv)
 
-	stdout, stderr, err := executeSession(t, "--pretty", "session", "7392")
+	stdout, stderr, err := executeSession(t, "--pretty", "session", reportURL)
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want nil; stderr=%q", err, stderr)
 	}
 	if got := stderr; got != "" {
 		t.Fatalf("stderr = %q, want empty", got)
 	}
-	if got := stdout; !bytes.Contains([]byte(got), []byte("{\n  \"id\": 7392")) {
+	if got := stdout; !bytes.Contains([]byte(got), []byte("{\n  \"team_slug\":")) {
 		t.Fatalf("stdout = %q, want indented JSON", got)
+	}
+	if got := stdout; bytes.Contains([]byte(got), []byte(`"id": 7392`)) {
+		t.Fatalf("stdout = %q, should not expose session database id", got)
 	}
 }
 

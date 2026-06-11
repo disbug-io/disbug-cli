@@ -13,6 +13,7 @@ import (
 
 // Project is the project attached to a session.
 type Project struct {
+	ID   int64  `json:"id"`
 	Slug string `json:"slug"`
 	Name string `json:"name"`
 }
@@ -25,16 +26,18 @@ type Reporter struct {
 
 // SessionSummary is a compact session record returned by ListSessions.
 type SessionSummary struct {
-	ID               int64     `json:"id"`
-	Project          *Project  `json:"project"`
-	URL              string    `json:"url"`
-	Status           string    `json:"status"`
-	PinCount         int       `json:"pin_count"`
-	FirstPinFeedback string    `json:"first_pin_feedback"`
-	Reporter         *Reporter `json:"reporter"`
-	CreatedAt        string    `json:"created_at"`
-	UpdatedAt        string    `json:"updated_at"`
-	FreeTierLocked   bool      `json:"free_tier_locked"`
+	TeamSlug             string    `json:"team_slug"`
+	Project              *Project  `json:"project"`
+	ProjectSessionNumber int64     `json:"project_session_number"`
+	ReportURL            string    `json:"report_url"`
+	URL                  string    `json:"url"`
+	Status               string    `json:"status"`
+	PinCount             int       `json:"pin_count"`
+	FirstPinFeedback     string    `json:"first_pin_feedback"`
+	Reporter             *Reporter `json:"reporter"`
+	CreatedAt            string    `json:"created_at"`
+	UpdatedAt            string    `json:"updated_at"`
+	FreeTierLocked       bool      `json:"free_tier_locked"`
 }
 
 // ListSessionsParams holds optional filters for ListSessions.
@@ -174,7 +177,6 @@ func searchPath(p *SearchParams, scope string) string {
 
 // PinLite is a compact pin record embedded in session responses.
 type PinLite struct {
-	ID          int64          `json:"id"`
 	Number      int64          `json:"number"`
 	Feedback    string         `json:"feedback"`
 	URL         *string        `json:"url"`
@@ -185,19 +187,38 @@ type PinLite struct {
 
 // SessionDetail is a full session record with its pins.
 type SessionDetail struct {
-	ID        int64     `json:"id"`
-	Status    string    `json:"status"`
-	Project   *Project  `json:"project"`
-	Reporter  *Reporter `json:"reporter"`
-	URL       string    `json:"url"`
-	UpdatedAt string    `json:"updated_at"`
-	Pins      []PinLite `json:"pins"`
+	TeamSlug             string    `json:"team_slug"`
+	Project              *Project  `json:"project"`
+	ProjectSessionNumber int64     `json:"project_session_number"`
+	ReportURL            string    `json:"report_url"`
+	Status               string    `json:"status"`
+	Reporter             *Reporter `json:"reporter"`
+	URL                  string    `json:"url"`
+	UpdatedAt            string    `json:"updated_at"`
+	Pins                 []PinLite `json:"pins"`
 }
 
-// GetSession calls GET /api/sessions/{id}/.
-func (c *Client) GetSession(ctx context.Context, sessionID int64) (*SessionDetail, error) {
+// SessionRef returns the scoped reference for this session summary.
+func (s SessionSummary) SessionRef() (ref.SessionRef, error) {
+	if s.TeamSlug == "" || s.Project == nil || s.Project.ID <= 0 || s.ProjectSessionNumber <= 0 {
+		return ref.SessionRef{}, fmt.Errorf("session is missing scoped identity")
+	}
+	return ref.SessionRef{TeamSlug: s.TeamSlug, ProjectID: s.Project.ID, SessionNumber: s.ProjectSessionNumber}, nil
+}
+
+// ScopedID returns a stable cloud watch identifier that does not expose DB primary keys.
+func (s SessionSummary) ScopedID() string {
+	sessionRef, err := s.SessionRef()
+	if err != nil {
+		return ""
+	}
+	return sessionRef.RefString()
+}
+
+// GetSession calls GET /api/teams/{team}/projects/{project}/sessions/{number}/.
+func (c *Client) GetSession(ctx context.Context, sessionRef ref.SessionRef) (*SessionDetail, error) {
 	var session SessionDetail
-	if err := c.doJSON(ctx, http.MethodGet, fmt.Sprintf("/api/sessions/%d/", sessionID), nil, &session); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, scopedSessionPath(sessionRef), nil, &session); err != nil {
 		return nil, err
 	}
 
@@ -238,7 +259,7 @@ type PinFullResolved struct {
 
 // ResolveReplay downloads the replay asset to a local cache file and returns
 // a PinFullResolved with the replay field replaced by a local file path.
-func (c *Client) ResolveReplay(ctx context.Context, pin *PinFull, sessionID, pinNumber int64) (*PinFullResolved, error) {
+func (c *Client) ResolveReplay(ctx context.Context, pin *PinFull, sessionNumber, pinNumber int64) (*PinFullResolved, error) {
 	resolved := &PinFullResolved{
 		PinLite:        pin.PinLite,
 		Screenshot:     pin.Screenshot,
@@ -250,7 +271,7 @@ func (c *Client) ResolveReplay(ctx context.Context, pin *PinFull, sessionID, pin
 	}
 
 	if pin.SessionReplay != nil && pin.SessionReplay.URL != "" {
-		replayFile, err := DownloadReplay(ctx, pin.SessionReplay, sessionID, pinNumber)
+		replayFile, err := DownloadReplay(ctx, pin.SessionReplay, sessionNumber, pinNumber)
 		if err != nil {
 			return nil, err
 		}
@@ -260,14 +281,14 @@ func (c *Client) ResolveReplay(ctx context.Context, pin *PinFull, sessionID, pin
 	return resolved, nil
 }
 
-// GetPinByNumber calls GET /api/sessions/{id}/pins/by-number/{n}/.
+// GetPinByNumber calls GET /api/teams/{team}/projects/{project}/sessions/{number}/pins/by-number/{n}/.
 func (c *Client) GetPinByNumber(
 	ctx context.Context,
-	sessionID int64,
+	sessionRef ref.SessionRef,
 	pinNumber int64,
 	fields []string,
 ) (*PinFull, error) {
-	path := fmt.Sprintf("/api/sessions/%d/pins/by-number/%d/", sessionID, pinNumber)
+	path := scopedSessionPath(sessionRef) + fmt.Sprintf("pins/by-number/%d/", pinNumber)
 	if len(fields) > 0 {
 		normalizedFields, err := ref.NormalizeFields(fields)
 		if err != nil {
@@ -290,4 +311,13 @@ func (c *Client) GetPinByNumber(
 	}
 
 	return &pin, nil
+}
+
+func scopedSessionPath(sessionRef ref.SessionRef) string {
+	return fmt.Sprintf(
+		"/api/teams/%s/projects/%d/sessions/%d/",
+		url.PathEscape(sessionRef.TeamSlug),
+		sessionRef.ProjectID,
+		sessionRef.SessionNumber,
+	)
 }

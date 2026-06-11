@@ -29,10 +29,10 @@ func TestBackendOpenAPISchemaContract(t *testing.T) {
 		"/api/sessions/": {
 			"GET": "ListSessions",
 		},
-		"/api/sessions/{id}/": {
+		"/api/teams/{team_slug}/projects/{project_id}/sessions/{session_number}/": {
 			"GET": "GetSession",
 		},
-		"/api/sessions/{id}/pins/by-number/{n}/": {
+		"/api/teams/{team_slug}/projects/{project_id}/sessions/{session_number}/pins/by-number/{pin_number}/": {
 			"GET": "GetPinByNumber",
 		},
 		"/api/search/": {
@@ -87,10 +87,10 @@ func TestBackendOpenAPISchemaContract(t *testing.T) {
 		t.Fatal("GET /api/search/ q parameter must be required")
 	}
 
-	pinByNumber := doc.Paths.Find("/api/sessions/{id}/pins/by-number/{n}/").Get
+	pinByNumber := doc.Paths.Find("/api/teams/{team_slug}/projects/{project_id}/sessions/{session_number}/pins/by-number/{pin_number}/").Get
 	fieldsParam := operationParameter(pinByNumber, "fields")
 	if fieldsParam == nil {
-		t.Fatal("GET /api/sessions/{id}/pins/by-number/{n}/ fields parameter is missing")
+		t.Fatal("GET scoped pin-by-number fields parameter is missing")
 	}
 	if fieldsParam.Schema == nil || fieldsParam.Schema.Value == nil {
 		t.Fatal("fields parameter schema is missing")
@@ -110,9 +110,14 @@ func TestBackendOpenAPISchemaContract(t *testing.T) {
 		}
 	}
 
-	assertSchemaType(t, doc.Components.Parameters["SessionID"].Value.Schema.Value, "integer")
-	assertSchemaType(t, doc.Components.Schemas["SessionSummary"].Value.Properties["id"].Value, "integer")
-	assertSchemaType(t, doc.Components.Schemas["PinLite"].Value.Properties["id"].Value, "integer")
+	assertSchemaType(t, doc.Components.Parameters["ProjectID"].Value.Schema.Value, "integer")
+	assertSchemaType(t, doc.Components.Parameters["SessionNumber"].Value.Schema.Value, "integer")
+	assertPropertyAbsent(t, doc.Components.Schemas["SessionSummary"].Value, "id")
+	assertPropertyAbsent(t, doc.Components.Schemas["SessionDetail"].Value, "id")
+	assertPropertyAbsent(t, doc.Components.Schemas["PinLite"].Value, "id")
+	assertSchemaType(t, doc.Components.Schemas["SessionSummary"].Value.Properties["project_session_number"].Value, "integer")
+	assertSchemaType(t, doc.Components.Schemas["SessionSummary"].Value.Properties["report_url"].Value, "string")
+	assertSchemaType(t, doc.Components.Schemas["PinLite"].Value.Properties["number"].Value, "integer")
 	assertPropertyNullable(t, doc.Components.Schemas["SessionSummary"].Value, "project")
 	assertPropertyNullable(t, doc.Components.Schemas["SessionSummary"].Value, "reporter")
 	assertPropertyAbsent(t, doc.Components.Schemas["SessionSummary"].Value, "title")

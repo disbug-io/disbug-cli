@@ -42,7 +42,9 @@ func DownloadReplay(ctx context.Context, asset *Asset, sessionID int64, pinNumbe
 	if err != nil {
 		return nil, fmt.Errorf("replay download: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("replay download: HTTP %d", resp.StatusCode)
@@ -61,7 +63,9 @@ func DownloadReplay(ctx context.Context, asset *Asset, sessionID int64, pinNumbe
 		if err != nil {
 			return nil, fmt.Errorf("replay gzip open: %w", err)
 		}
-		defer reader.Close()
+		defer func() {
+			_ = reader.Close()
+		}()
 
 		decompressed, err := io.ReadAll(reader)
 		if err != nil {
@@ -70,7 +74,7 @@ func DownloadReplay(ctx context.Context, asset *Asset, sessionID int64, pinNumbe
 		body = decompressed
 	}
 
-	if err := os.WriteFile(destPath, body, 0644); err != nil {
+	if err := os.WriteFile(destPath, body, 0o600); err != nil {
 		return nil, fmt.Errorf("replay write: %w", err)
 	}
 
@@ -87,7 +91,7 @@ func replayCacheDir() (string, error) {
 		cacheDir = os.TempDir()
 	}
 	dir := filepath.Join(cacheDir, "disbug", "replays")
-	return dir, os.MkdirAll(dir, 0755)
+	return dir, os.MkdirAll(dir, 0o750)
 }
 
 // extractReplayMeta parses top-level fields without loading the full events array.

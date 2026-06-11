@@ -2,19 +2,22 @@ package ref
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"unicode"
 )
 
-// SessionRef identifies a Disbug session.
+// SessionRef identifies a cloud Disbug session by the same scoped identity used in report URLs.
 type SessionRef struct {
-	ID int64
+	TeamSlug      string
+	ProjectID     int64
+	SessionNumber int64
 }
 
 // PinRef identifies a pin within a Disbug session.
 type PinRef struct {
-	Session int64
+	Session SessionRef
 	Pin     int64
 }
 
@@ -44,54 +47,45 @@ var wireFields = map[string]string{
 	"video":      "video_recording",
 }
 
-// ParseSession parses a positive integer session reference.
+// ParseSession parses a Disbug report URL.
 func ParseSession(arg string) (SessionRef, error) {
-	id, err := parsePositiveInt(arg)
+	parsedURL, err := parseReportURL(arg)
 	if err != nil {
 		return SessionRef{}, fmt.Errorf("invalid session ref %q: %w", arg, err)
 	}
 
-	return SessionRef{ID: id}, nil
+	return parsedURL.Session, nil
 }
 
-// ParsePin parses a positive session and pin reference in session.pin form.
+// ParsePin parses a Disbug report URL with a pin query parameter.
 func ParsePin(arg string) (PinRef, error) {
-	parts := strings.Split(arg, ".")
-	if len(parts) != 2 {
-		return PinRef{}, fmt.Errorf("invalid pin ref %q", arg)
-	}
-
-	session, err := parsePositiveInt(parts[0])
+	parsedURL, err := parseReportURL(arg)
 	if err != nil {
 		return PinRef{}, fmt.Errorf("invalid pin ref %q: %w", arg, err)
 	}
-
-	pin, err := parsePositiveInt(parts[1])
-	if err != nil {
-		return PinRef{}, fmt.Errorf("invalid pin ref %q: %w", arg, err)
+	if parsedURL.Pin == 0 {
+		return PinRef{}, fmt.Errorf("invalid pin ref %q: missing pin query parameter", arg)
 	}
 
-	return PinRef{Session: session, Pin: pin}, nil
+	return PinRef(parsedURL), nil
 }
 
 // ParsePinFetch parses a pin reference with an optional colon-delimited field override.
 func ParsePinFetch(arg string, defaultFields []string) (PinFetch, error) {
-	parts := strings.Split(arg, ":")
-	if len(parts) > 2 {
-		return PinFetch{}, fmt.Errorf("invalid pin fetch %q", arg)
-	}
-
-	pin, err := ParsePin(parts[0])
+	refArg, fieldsArg, hasFields := splitPinFetch(arg)
+	pin, err := ParsePin(refArg)
 	if err != nil {
 		return PinFetch{}, err
 	}
 
 	fields := defaultFields
-	if len(parts) == 2 {
-		if parts[1] == "" {
+	if hasFields {
+		if fieldsArg == "" {
 			return PinFetch{}, fmt.Errorf("missing fields in pin fetch %q", arg)
 		}
-		fields = strings.Split(parts[1], ",")
+		fields = strings.Split(fieldsArg, ",")
+	} else if queryFields := fieldsFromReportURL(refArg); len(queryFields) > 0 {
+		fields = queryFields
 	} else if len(defaultFields) == 0 {
 		fields = []string{"all"}
 	}
@@ -102,6 +96,21 @@ func ParsePinFetch(arg string, defaultFields []string) (PinFetch, error) {
 	}
 
 	return PinFetch{Pin: pin, Fields: normalizedFields}, nil
+}
+
+// ParseReportPinNumber parses a positive pin number from a flag.
+func ParseReportPinNumber(arg string) (int64, error) {
+	return parsePositiveInt(arg)
+}
+
+// RefString returns a stable, human-readable scoped session reference.
+func (r SessionRef) RefString() string {
+	return fmt.Sprintf("%s/projects/%d/sessions/%d", r.TeamSlug, r.ProjectID, r.SessionNumber)
+}
+
+// RefString returns a stable, human-readable scoped pin reference.
+func (r PinRef) RefString() string {
+	return fmt.Sprintf("%s?pin=%d", r.Session.RefString(), r.Pin)
 }
 
 // NormalizeFields validates fields, removes duplicates, and returns canonical order.
@@ -179,6 +188,76 @@ func DedupAndUnion(fetches []PinFetch) []PinFetch {
 	}
 
 	return merged
+}
+
+type parsedReportURL struct {
+	Session SessionRef
+	Pin     int64
+}
+
+func parseReportURL(arg string) (parsedReportURL, error) {
+	value := strings.TrimSpace(arg)
+	if value == "" {
+		return parsedReportURL{}, fmt.Errorf("empty value")
+	}
+	u, err := url.Parse(value)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return parsedReportURL{}, fmt.Errorf("expected Disbug report URL")
+	}
+
+	parts := strings.Split(strings.Trim(u.EscapedPath(), "/"), "/")
+	if len(parts) != 5 || parts[1] != "projects" || parts[3] != "sessions" {
+		return parsedReportURL{}, fmt.Errorf("expected path /<team>/projects/<project>/sessions/<session>/")
+	}
+
+	teamSlug, err := url.PathUnescape(parts[0])
+	if err != nil || teamSlug == "" {
+		return parsedReportURL{}, fmt.Errorf("invalid team slug")
+	}
+	projectID, err := parsePositiveInt(parts[2])
+	if err != nil {
+		return parsedReportURL{}, fmt.Errorf("invalid project id: %w", err)
+	}
+	sessionNumber, err := parsePositiveInt(parts[4])
+	if err != nil {
+		return parsedReportURL{}, fmt.Errorf("invalid session number: %w", err)
+	}
+
+	pin := int64(0)
+	if pinRaw := strings.TrimSpace(u.Query().Get("pin")); pinRaw != "" {
+		pin, err = parsePositiveInt(pinRaw)
+		if err != nil {
+			return parsedReportURL{}, fmt.Errorf("invalid pin number: %w", err)
+		}
+	}
+
+	return parsedReportURL{
+		Session: SessionRef{TeamSlug: teamSlug, ProjectID: projectID, SessionNumber: sessionNumber},
+		Pin:     pin,
+	}, nil
+}
+
+func fieldsFromReportURL(arg string) []string {
+	u, err := url.Parse(strings.TrimSpace(arg))
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return nil
+	}
+	fieldsRaw := strings.TrimSpace(u.Query().Get("fields"))
+	if fieldsRaw == "" {
+		return nil
+	}
+	return strings.Split(fieldsRaw, ",")
+}
+
+func splitPinFetch(arg string) (string, string, bool) {
+	if strings.Contains(arg, "://") {
+		return arg, "", false
+	}
+	parts := strings.Split(arg, ":")
+	if len(parts) == 2 {
+		return parts[0], parts[1], true
+	}
+	return arg, "", false
 }
 
 func unionFields(fieldLists ...[]string) []string {
