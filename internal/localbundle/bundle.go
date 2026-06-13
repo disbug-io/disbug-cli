@@ -87,6 +87,7 @@ type Summary struct {
 	Pins    []PinSummary   `json:"pins"`
 }
 
+// SessionSummary is the session-level summary of a local report.
 type SessionSummary struct {
 	ID        string `json:"id,omitempty"`
 	Status    string `json:"status,omitempty"`
@@ -95,6 +96,7 @@ type SessionSummary struct {
 	PinCount  int    `json:"pin_count"`
 }
 
+// PinSummary is the per-pin summary in a local report.
 type PinSummary struct {
 	Number    int             `json:"number"`
 	Feedback  string          `json:"feedback,omitempty"`
@@ -103,6 +105,7 @@ type PinSummary struct {
 	Artifacts ArtifactSummary `json:"artifacts"`
 }
 
+// ArtifactSummary counts the artifacts captured for a pin.
 type ArtifactSummary struct {
 	Screenshot   bool `json:"screenshot"`
 	Replay       bool `json:"replay"`
@@ -127,12 +130,14 @@ type PinInspect struct {
 	Events        []map[string]any `json:"events,omitempty"`
 }
 
+// LocalAsset describes a binary artifact (e.g. screenshot) extracted from a local report.
 type LocalAsset struct {
 	Path        string `json:"path"`
 	ContentType string `json:"content_type,omitempty"`
 	SizeBytes   int64  `json:"size_bytes"`
 }
 
+// LocalReplayFile describes the rrweb replay artifact extracted from a local report.
 type LocalReplayFile struct {
 	Path         string `json:"path"`
 	ContentType  string `json:"content_type,omitempty"`
@@ -145,7 +150,7 @@ type LocalReplayFile struct {
 
 // Load parses a portable local Disbug report JSON file.
 func Load(reportPath string) (*Bundle, error) {
-	data, err := os.ReadFile(reportPath)
+	data, err := os.ReadFile(reportPath) //nolint:gosec // reportPath is the user-supplied local report file to inspect.
 	if err != nil {
 		return nil, fmt.Errorf("read local report: %w", err)
 	}
@@ -184,6 +189,7 @@ func Load(reportPath string) (*Bundle, error) {
 	}, nil
 }
 
+// Summary returns the source/session/pin summary for the local report.
 func (b *Bundle) Summary() (Summary, error) {
 	pins := make([]PinSummary, 0, len(b.report.Session.Pins))
 	for _, pin := range b.report.Session.Pins {
@@ -218,6 +224,7 @@ func (b *Bundle) Summary() (Summary, error) {
 	}, nil
 }
 
+// InspectPin returns the field-selected details for one pin in the local report.
 func (b *Bundle) InspectPin(number int, fields []string, cacheDir string) (PinInspect, error) {
 	pin, ok := b.findPin(number)
 	if !ok {
@@ -450,7 +457,7 @@ func replayMeta(data []byte) replayMetadata {
 	if err != nil {
 		return replayMetadata{}
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	body, err := io.ReadAll(reader)
 	if err != nil {

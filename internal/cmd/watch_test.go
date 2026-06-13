@@ -210,10 +210,6 @@ func TestWatchCloudOnlyBackfillsAndPollsCloudSessions(t *testing.T) {
 	}
 }
 
-func fixedWatchNow() time.Time {
-	return time.Date(2026, 5, 23, 8, 24, 43, 0, time.UTC)
-}
-
 func setupWatchClient(t *testing.T, srv *httptest.Server) {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
