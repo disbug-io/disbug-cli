@@ -9,20 +9,17 @@ import (
 	"os"
 	osExec "os/exec"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/disbug-io/disbug-cli/internal/client"
 	"github.com/disbug-io/disbug-cli/internal/errfmt"
-	"github.com/disbug-io/disbug-cli/internal/localstore"
 )
 
 const defaultWatchPollInterval = 30 * time.Second
 
 // WatchCmd streams new Disbug sessions as JSONL events.
 type WatchCmd struct {
-	LocalOnly    bool   `name:"local-only" help:"Watch local sessions only."`
 	CloudOnly    bool   `name:"cloud-only" help:"Watch cloud sessions only."`
 	Since        string `help:"Backfill sessions newer than this duration before watching, e.g. 30s, 15m, or 2h."`
 	Status       string `help:"Filter by status." enum:"open,resolved,dismissed," default:""`
@@ -58,12 +55,6 @@ type watchPin struct {
 	URL       string `json:"url,omitempty"`
 }
 
-type localWatchOptions struct {
-	Since  time.Time
-	Status string
-	Now    func() time.Time
-}
-
 type cloudWatchOptions struct {
 	Since   time.Time
 	Status  string
@@ -80,30 +71,12 @@ type watchEmitter struct {
 
 // Run streams session.new events until the context is cancelled.
 func (c *WatchCmd) Run(ctx context.Context, b bindings) error {
-	if c.LocalOnly && c.CloudOnly {
-		return &errfmt.UsageError{Message: "--local-only and --cloud-only cannot be combined"}
-	}
-
-	var cloudClient *client.Client
-	localEnabled := !c.CloudOnly
-	cloudEnabled := c.CloudOnly
-	if c.CloudOnly {
-		var err error
-		cloudClient, _, err = newAuthenticatedClient(b.Flags)
-		if err != nil {
+	cloudClient, _, err := newAuthenticatedClient(b.Flags)
+	if err != nil {
+		if c.CloudOnly {
 			return &errfmt.UsageError{Message: "--cloud-only requires sign-in; run disbug login"}
 		}
-	} else if !c.LocalOnly {
-		var err error
-		cloudClient, _, err = newAuthenticatedClient(b.Flags)
-		if err == nil {
-			cloudEnabled = true
-		} else {
-			var noToken errfmt.NoToken
-			if !errors.As(err, &noToken) {
-				return err
-			}
-		}
+		return err
 	}
 
 	sinceRaw, sinceDuration, err := parseSinceFlag(c.Since)
@@ -115,29 +88,11 @@ func (c *WatchCmd) Run(ctx context.Context, b bindings) error {
 		return err
 	}
 
-	var store *localstore.Store
-	if localEnabled {
-		store, err = localstore.Open("")
-		if err != nil {
-			return err
-		}
-		defer func() {
-			_ = store.Close()
-		}()
-	}
-
 	sinceLabel := "none"
 	if sinceRaw != "" {
 		sinceLabel = sinceRaw
 	}
-	sourceLabels := make([]string, 0, 2)
-	if localEnabled {
-		sourceLabels = append(sourceLabels, "local")
-	}
-	if cloudEnabled {
-		sourceLabels = append(sourceLabels, "cloud")
-	}
-	_, _ = fmt.Fprintf(b.Stderr, "watching: %s  (since=%s, poll=%s)\n", strings.Join(sourceLabels, ", "), sinceLabel, pollInterval)
+	_, _ = fmt.Fprintf(b.Stderr, "watching: cloud  (since=%s, poll=%s)\n", sinceLabel, pollInterval)
 
 	emitter := watchEmitter{
 		stdout: b.Stdout,
@@ -152,55 +107,25 @@ func (c *WatchCmd) Run(ctx context.Context, b bindings) error {
 	var liveSince time.Time
 	if sinceDuration > 0 {
 		liveSince = now().Add(-sinceDuration)
-		var events []watchEvent
-		if localEnabled {
-			localEvents, err := localBackfillEvents(ctx, store, localWatchOptions{
-				Since:  liveSince,
-				Status: c.Status,
-				Now:    now,
-			})
-			if err != nil {
-				return err
-			}
-			events = append(events, localEvents...)
+		events, err := cloudBackfillEvents(ctx, cloudClient, cloudWatchOptions{
+			Since:   liveSince,
+			Status:  c.Status,
+			Project: c.Project,
+			Now:     now,
+		})
+		if err != nil {
+			return err
 		}
-		if cloudEnabled {
-			cloudEvents, err := cloudBackfillEvents(ctx, cloudClient, cloudWatchOptions{
-				Since:   liveSince,
-				Status:  c.Status,
-				Project: c.Project,
-				Now:     now,
-			})
-			if err != nil {
-				return err
-			}
-			events = append(events, cloudEvents...)
-		}
-		sortWatchEvents(events)
 		if err := emitNewWatchEvents(ctx, events, dedupe, emitter); err != nil {
 			return err
 		}
 	} else {
-		if localEnabled {
-			if err := seedLocalDedupe(ctx, store, dedupe); err != nil {
-				return err
-			}
-		}
-		if cloudEnabled {
-			if err := seedCloudDedupe(ctx, cloudClient, c.Status, c.Project, dedupe); err != nil {
-				return err
-			}
+		if err := seedCloudDedupe(ctx, cloudClient, c.Status, c.Project, dedupe); err != nil {
+			return err
 		}
 	}
 
-	switch {
-	case localEnabled && cloudEnabled:
-		return watchCombinedPoll(ctx, store, cloudClient, localWatchOptions{Since: liveSince, Status: c.Status, Now: now}, cloudWatchOptions{Since: liveSince, Status: c.Status, Project: c.Project, Now: now}, pollInterval, dedupe, emitter)
-	case cloudEnabled:
-		return watchCloudPoll(ctx, cloudClient, cloudWatchOptions{Since: liveSince, Status: c.Status, Project: c.Project, Now: now}, pollInterval, dedupe, emitter)
-	default:
-		return watchLocalPoll(ctx, store, localWatchOptions{Since: liveSince, Status: c.Status, Now: now}, pollInterval, dedupe, emitter)
-	}
+	return watchCloudPoll(ctx, cloudClient, cloudWatchOptions{Since: liveSince, Status: c.Status, Project: c.Project, Now: now}, pollInterval, dedupe, emitter)
 }
 
 func parseWatchPollInterval(raw string) (time.Duration, error) {
@@ -213,29 +138,6 @@ func parseWatchPollInterval(raw string) (time.Duration, error) {
 		return 0, &errfmt.UsageError{Message: "--poll-interval must be a positive duration"}
 	}
 	return duration, nil
-}
-
-func localBackfillEvents(
-	ctx context.Context,
-	store *localstore.Store,
-	opts localWatchOptions,
-) ([]watchEvent, error) {
-	events, err := localEvents(ctx, store, opts, true)
-	if err != nil {
-		return nil, err
-	}
-	sort.SliceStable(events, func(i, j int) bool {
-		return events[i].Session.CreatedAt < events[j].Session.CreatedAt
-	})
-	return events, nil
-}
-
-func localLiveEvents(
-	ctx context.Context,
-	store *localstore.Store,
-	opts localWatchOptions,
-) ([]watchEvent, error) {
-	return localEvents(ctx, store, opts, false)
 }
 
 func cloudBackfillEvents(
@@ -293,69 +195,6 @@ func cloudEvents(
 		events = append(events, event)
 	}
 	return events, nil
-}
-
-func localEvents(
-	ctx context.Context,
-	store *localstore.Store,
-	opts localWatchOptions,
-	backfill bool,
-) ([]watchEvent, error) {
-	list, err := store.ListSessions(ctx, localstore.ListOptions{
-		Limit: 100,
-		Since: opts.Since,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	now := opts.Now
-	if now == nil {
-		now = func() time.Time {
-			return time.Now().UTC()
-		}
-	}
-	events := make([]watchEvent, 0, len(list.Results))
-	for _, summary := range list.Results {
-		if opts.Status != "" && summary.Status != opts.Status {
-			continue
-		}
-		event, err := localWatchEvent(ctx, store, summary, backfill, now())
-		if err != nil {
-			return nil, err
-		}
-		events = append(events, event)
-	}
-	return events, nil
-}
-
-func localWatchEvent(
-	ctx context.Context,
-	store *localstore.Store,
-	summary localstore.SessionSummary,
-	backfill bool,
-	emittedAt time.Time,
-) (watchEvent, error) {
-	session, err := store.GetSession(ctx, summary.ID)
-	if err != nil {
-		return watchEvent{}, err
-	}
-	pins := watchPinsFromSession(session)
-	return watchEvent{
-		Type:      "session.new",
-		Source:    "local",
-		Backfill:  backfill,
-		EmittedAt: emittedAt.UTC().Format(time.RFC3339),
-		Session: watchSession{
-			ID:        summary.ID,
-			Ref:       "disbug://local/" + summary.ID,
-			CreatedAt: summary.CreatedAt,
-			Status:    summary.Status,
-			SourceURL: summary.URL,
-			PinCount:  summary.PinCount,
-			Pins:      pins,
-		},
-	}, nil
 }
 
 func cloudWatchEvent(
@@ -440,62 +279,6 @@ func cloudWatchEvent(
 	}, nil
 }
 
-func watchPinsFromSession(session map[string]any) []watchPin {
-	rawPins, _ := session["pins"].([]any)
-	pins := make([]watchPin, 0, len(rawPins))
-	for _, raw := range rawPins {
-		pinMap, ok := raw.(map[string]any)
-		if !ok {
-			continue
-		}
-		number := intFromAny(pinMap["pin_number"])
-		if number == 0 {
-			number = intFromAny(pinMap["number"])
-		}
-		feedback, _ := pinMap["feedback"].(string)
-		url, _ := pinMap["url"].(string)
-		pins = append(pins, watchPin{
-			PinNumber: number,
-			Feedback:  feedback,
-			URL:       url,
-		})
-	}
-	sort.SliceStable(pins, func(i, j int) bool {
-		return pins[i].PinNumber < pins[j].PinNumber
-	})
-	return pins
-}
-
-func intFromAny(value any) int {
-	switch typed := value.(type) {
-	case int:
-		return typed
-	case int64:
-		return int(typed)
-	case float64:
-		return int(typed)
-	case json.Number:
-		parsed, _ := typed.Int64()
-		return int(parsed)
-	case string:
-		parsed, _ := strconv.Atoi(typed)
-		return parsed
-	default:
-		return 0
-	}
-}
-
-func seedLocalDedupe(ctx context.Context, store *localstore.Store, dedupe map[string]bool) error {
-	list, err := store.ListSessions(ctx, localstore.ListOptions{Limit: 100})
-	if err != nil {
-		return err
-	}
-	for _, summary := range list.Results {
-		dedupe[dedupeKey("local", summary.ID)] = true
-	}
-	return nil
-}
-
 func seedCloudDedupe(ctx context.Context, cli *client.Client, status string, project string, dedupe map[string]bool) error {
 	resp, err := cli.ListSessions(ctx, &client.ListSessionsParams{
 		Status:  status,
@@ -509,39 +292,6 @@ func seedCloudDedupe(ctx context.Context, cli *client.Client, status string, pro
 		dedupe[dedupeKey("cloud", summary.ScopedID())] = true
 	}
 	return nil
-}
-
-func watchLocalPoll(
-	ctx context.Context,
-	store *localstore.Store,
-	opts localWatchOptions,
-	pollInterval time.Duration,
-	dedupe map[string]bool,
-	emitter watchEmitter,
-) error {
-	ticker := time.NewTicker(pollInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-			events, err := localLiveEvents(ctx, store, opts)
-			if err != nil {
-				if watchContextDone(ctx, err) {
-					return nil
-				}
-				return err
-			}
-			sort.SliceStable(events, func(i, j int) bool {
-				return events[i].Session.CreatedAt < events[j].Session.CreatedAt
-			})
-			if err := emitNewWatchEvents(ctx, events, dedupe, emitter); err != nil {
-				return err
-			}
-		}
-	}
 }
 
 func watchCloudPoll(
@@ -567,47 +317,6 @@ func watchCloudPoll(
 				}
 				return err
 			}
-			sortWatchEvents(events)
-			if err := emitNewWatchEvents(ctx, events, dedupe, emitter); err != nil {
-				return err
-			}
-		}
-	}
-}
-
-func watchCombinedPoll(
-	ctx context.Context,
-	store *localstore.Store,
-	cli *client.Client,
-	localOpts localWatchOptions,
-	cloudOpts cloudWatchOptions,
-	pollInterval time.Duration,
-	dedupe map[string]bool,
-	emitter watchEmitter,
-) error {
-	ticker := time.NewTicker(pollInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-			events, err := localLiveEvents(ctx, store, localOpts)
-			if err != nil {
-				if watchContextDone(ctx, err) {
-					return nil
-				}
-				return err
-			}
-			cloudEvents, err := cloudLiveEvents(ctx, cli, cloudOpts)
-			if err != nil {
-				if watchContextDone(ctx, err) {
-					return nil
-				}
-				return err
-			}
-			events = append(events, cloudEvents...)
 			sortWatchEvents(events)
 			if err := emitNewWatchEvents(ctx, events, dedupe, emitter); err != nil {
 				return err

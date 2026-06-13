@@ -15,15 +15,15 @@ import (
 type GetPinInput struct {
 	Target string   `json:"target,omitempty" jsonschema:"Disbug report URL with ?pin=<number>"`
 	URL    string   `json:"url,omitempty" jsonschema:"Disbug report URL with ?pin=<number>"`
-	Pin    string   `json:"pin,omitempty" jsonschema:"Disbug report URL with ?pin=<number>, or local_<id>.<number> for source=local"`
-	Source string   `json:"source,omitempty" jsonschema:"Source: auto, cloud, or local"`
+	Pin    string   `json:"pin,omitempty" jsonschema:"Disbug report URL with ?pin=<number>"`
+	Source string   `json:"source,omitempty" jsonschema:"Source: auto or cloud"`
 	Fields []string `json:"fields,omitempty" jsonschema:"array of: screenshot console network events replay voice_note video all"`
 }
 
 func registerGetPin(srv *sdkmcp.Server, deps *Deps) {
 	sdkmcp.AddTool[GetPinInput, Result](srv, &sdkmcp.Tool{
 		Name:        "get_pin",
-		Description: "Get a Disbug pin by report URL from cloud, or by local_<id>.<number> from local source.",
+		Description: "Get a Disbug pin by report URL from cloud.",
 	}, func(
 		ctx context.Context,
 		_ *sdkmcp.CallToolRequest,
@@ -40,22 +40,7 @@ func registerGetPin(srv *sdkmcp.Server, deps *Deps) {
 		if err != nil {
 			return nil, nil, toolErr(err)
 		}
-		if source == sourceLocal {
-			store, err := requireLocal(deps)
-			if err != nil {
-				return nil, nil, errors.New(err.Error())
-			}
-			sessionID, number, err := parseLocalPinRef(target)
-			if err != nil {
-				return nil, nil, toolErr(err)
-			}
-			resp, err := store.GetPin(ctx, sessionID, number, in.Fields)
-			if err != nil {
-				return nil, nil, errors.New(mapLocalErr(sessionID, err).Error())
-			}
-			result := Result(resp)
-			return jsonResult(result), result, nil
-		}
+		_ = source
 		if err := requireCloud(deps); err != nil {
 			return nil, nil, toolErr(err)
 		}

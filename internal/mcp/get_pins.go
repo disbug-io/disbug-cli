@@ -18,14 +18,14 @@ import (
 type GetPinsItem struct {
 	Target string   `json:"target,omitempty" jsonschema:"Disbug report URL with ?pin=<number>"`
 	URL    string   `json:"url,omitempty" jsonschema:"Disbug report URL with ?pin=<number>"`
-	Pin    string   `json:"pin,omitempty" jsonschema:"Disbug report URL with ?pin=<number>, or local_<id>.<number> for source=local"`
+	Pin    string   `json:"pin,omitempty" jsonschema:"Disbug report URL with ?pin=<number>"`
 	Fields []string `json:"fields,omitempty" jsonschema:"fields for this pin; defaults to default_fields"`
 }
 
 // GetPinsInput is the input for the get_pins MCP tool.
 type GetPinsInput struct {
 	Items         []GetPinsItem `json:"items" jsonschema:"array of {target|url|pin, fields?} entries"`
-	Source        string        `json:"source,omitempty" jsonschema:"Source: auto, cloud, or local"`
+	Source        string        `json:"source,omitempty" jsonschema:"Source: auto or cloud"`
 	DefaultFields []string      `json:"default_fields,omitempty" jsonschema:"fields used when an item omits its own list"`
 }
 
@@ -49,13 +49,7 @@ func registerGetPins(srv *sdkmcp.Server, deps *Deps) {
 		if err != nil {
 			return nil, nil, toolErr(err)
 		}
-		if source == sourceLocal || (source == sourceAuto && strings.HasPrefix(itemTarget(in.Items[0]), "local_")) {
-			result, err := getLocalPins(ctx, deps, in)
-			if err != nil {
-				return nil, nil, err
-			}
-			return jsonResult(result), result, nil
-		}
+		_ = source
 		if err := requireCloud(deps); err != nil {
 			return nil, nil, toolErr(err)
 		}
@@ -101,37 +95,6 @@ func registerGetPins(srv *sdkmcp.Server, deps *Deps) {
 		result := resultFrom(res)
 		return jsonResult(result), result, nil
 	})
-}
-
-func getLocalPins(ctx context.Context, deps *Deps, in GetPinsInput) (Result, error) {
-	store, err := requireLocal(deps)
-	if err != nil {
-		return nil, errors.New(err.Error())
-	}
-	pins := make([]any, 0, len(in.Items))
-	errs := make([]any, 0)
-	for _, item := range in.Items {
-		rawRef := itemTarget(item)
-		sessionID, number, err := parseLocalPinRef(rawRef)
-		if err != nil {
-			errs = append(errs, map[string]any{"pin": rawRef, "error_message": errfmt.Format(err)})
-			continue
-		}
-		fields := item.Fields
-		if len(fields) == 0 {
-			fields = in.DefaultFields
-		}
-		pin, err := store.GetPin(ctx, sessionID, number, fields)
-		if err != nil {
-			errs = append(errs, map[string]any{"pin": rawRef, "error_message": mapLocalErr(sessionID, err).Error()})
-			continue
-		}
-		pins = append(pins, pin)
-	}
-	if len(pins) == 0 && len(errs) > 0 {
-		return nil, errors.New("all local pin fetches failed")
-	}
-	return Result{"pins": pins, "errors": errs}, nil
 }
 
 func itemTarget(item GetPinsItem) string {

@@ -69,3 +69,32 @@ func TestExecuteMCPHelpIncludesCommand(t *testing.T) {
 	assert.Contains(t, stdout.String(), "Run MCP integration commands.")
 	assert.Empty(t, stderr.String())
 }
+
+func TestExecuteHelpDoesNotExposeNativeHostCommands(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := Execute(context.Background(), []string{"--help"}, nil, &stdout, &stderr)
+
+	require.NoError(t, err)
+	assert.NotContains(t, stdout.String(), "native-host")
+	assert.NotContains(t, stdout.String(), "setup-local")
+	assert.NotContains(t, stdout.String(), "local-sessions")
+	assert.Empty(t, stderr.String())
+}
+
+func TestExecuteNativeHostCommandsAreUnknown(t *testing.T) {
+	for _, command := range []string{"native-host", "setup-local", "local-sessions"} {
+		t.Run(command, func(t *testing.T) {
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+
+			err := Execute(context.Background(), []string{command, "--help"}, nil, &stdout, &stderr)
+
+			require.Error(t, err)
+			var usage errfmt.UsageError
+			assert.True(t, errors.As(err, &usage))
+			assert.Empty(t, stdout.String())
+		})
+	}
+}

@@ -13,17 +13,17 @@ import (
 
 // GetSessionInput is the input for the get_session MCP tool.
 type GetSessionInput struct {
-	Target  string `json:"target,omitempty" jsonschema:"Disbug report URL, or local report id for source=local"`
+	Target  string `json:"target,omitempty" jsonschema:"Disbug report URL"`
 	URL     string `json:"url,omitempty" jsonschema:"Disbug report URL"`
-	ID      string `json:"id,omitempty" jsonschema:"local report id e.g. local_..."`
-	Session string `json:"session,omitempty" jsonschema:"local report id e.g. local_..."`
-	Source  string `json:"source,omitempty" jsonschema:"Source: auto, cloud, or local"`
+	ID      string `json:"id,omitempty" jsonschema:"Disbug report URL"`
+	Session string `json:"session,omitempty" jsonschema:"Disbug report URL"`
+	Source  string `json:"source,omitempty" jsonschema:"Source: auto or cloud"`
 }
 
 func registerGetSession(srv *sdkmcp.Server, deps *Deps) {
 	sdkmcp.AddTool[GetSessionInput, Result](srv, &sdkmcp.Tool{
 		Name:        "get_session",
-		Description: "Get full details for a Disbug session. Use a report URL for cloud, or a local report id for source=local.",
+		Description: "Get full details for a Disbug session, including pins, from cloud.",
 	}, func(
 		ctx context.Context,
 		_ *sdkmcp.CallToolRequest,
@@ -43,18 +43,7 @@ func registerGetSession(srv *sdkmcp.Server, deps *Deps) {
 		if err != nil {
 			return nil, nil, toolErr(err)
 		}
-		if source == sourceLocal {
-			store, err := requireLocal(deps)
-			if err != nil {
-				return nil, nil, errors.New(err.Error())
-			}
-			resp, err := store.GetSession(ctx, target)
-			if err != nil {
-				return nil, nil, errors.New(mapLocalErr(target, err).Error())
-			}
-			result := Result(resp)
-			return jsonResult(result), result, nil
-		}
+		_ = source
 		if err := requireCloud(deps); err != nil {
 			return nil, nil, toolErr(err)
 		}

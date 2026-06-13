@@ -25,6 +25,7 @@ var e2eTools = []string{
 	"get_session",
 	"get_pin",
 	"get_pins",
+	"inspect_local_report",
 	"search_sessions",
 	"search_pins",
 }
@@ -91,6 +92,30 @@ func TestMCPSubprocessEOFShutdownExitsPromptly(t *testing.T) {
 		t.Fatalf("close stdin: %v", err)
 	}
 	waitForExit(t, proc, e2eTimeout)
+}
+
+func TestMCPSubprocessInspectLocalReportWithoutCloud(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping subprocess MCP E2E test in short mode")
+	}
+
+	binary := buildBinary(t)
+	reportPath := writeMCPLocalReport(t)
+	proc := startMCP(t, binary, t.TempDir())
+	defer proc.close(t)
+
+	initializeMCP(t, proc)
+	text := callToolE2E(t, proc, "inspect_local_report", map[string]any{
+		"path":   reportPath,
+		"pin":    1,
+		"fields": []string{"console"},
+	})
+
+	for _, want := range []string{`"source":"local"`, `"number":1`, "button missing", "boom"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("inspect_local_report content = %q, want %q", text, want)
+		}
+	}
 }
 
 func TestMCPSubprocessToolsCall(t *testing.T) {

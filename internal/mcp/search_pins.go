@@ -14,7 +14,7 @@ import (
 // SearchPinsInput is the input for the search_pins MCP tool.
 type SearchPinsInput struct {
 	Query  string `json:"query" jsonschema:"Search query"`
-	Source string `json:"source,omitempty" jsonschema:"Source: auto, cloud, or local"`
+	Source string `json:"source,omitempty" jsonschema:"Source: auto or cloud"`
 	Limit  int    `json:"limit,omitempty" jsonschema:"Maximum results to return; defaults to 20 and is capped at 50"`
 }
 
@@ -36,18 +36,7 @@ func registerSearchPins(srv *sdkmcp.Server, deps *Deps) {
 		if err != nil {
 			return nil, nil, toolErr(err)
 		}
-		if source == sourceLocal || (source == sourceAuto && deps != nil && !deps.CloudAvailable && deps.LocalStore != nil) {
-			store, err := requireLocal(deps)
-			if err != nil {
-				return nil, nil, errors.New(err.Error())
-			}
-			resp, err := store.SearchPins(ctx, in.Query, in.Limit)
-			if err != nil {
-				return nil, nil, errors.New(err.Error())
-			}
-			result := resultFrom(resp)
-			return jsonResult(result), result, nil
-		}
+		_ = source
 		if err := requireCloud(deps); err != nil {
 			return nil, nil, toolErr(err)
 		}
