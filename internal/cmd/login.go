@@ -85,7 +85,7 @@ func (c *LoginCmd) Run(ctx context.Context, b bindings) error {
 
 	_, err = fmt.Fprintf(
 		b.Stdout,
-		"Logged in as %s for team %s.\nRun disbug setup-local --extension-id <chrome-extension-id> to enable extension -> local AI handoff.\n",
+		"Logged in as %s for team %s.\n",
 		emptyDefault(me.AgentName, name),
 		me.Team,
 	)

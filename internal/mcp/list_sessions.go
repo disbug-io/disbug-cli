@@ -9,12 +9,11 @@ import (
 
 	"github.com/disbug-io/disbug-cli/internal/client"
 	"github.com/disbug-io/disbug-cli/internal/errfmt"
-	"github.com/disbug-io/disbug-cli/internal/localstore"
 )
 
 // ListSessionsInput is the input for the list_sessions MCP tool.
 type ListSessionsInput struct {
-	Source  string `json:"source,omitempty" jsonschema:"Source: auto, cloud, or local"`
+	Source  string `json:"source,omitempty" jsonschema:"Source: auto or cloud"`
 	Status  string `json:"status,omitempty" jsonschema:"Filter by status: open, resolved, or dismissed"`
 	Project string `json:"project,omitempty" jsonschema:"Filter by project slug"`
 	Limit   int    `json:"limit,omitempty" jsonschema:"Maximum results to return; defaults to 50 and is capped at 100"`
@@ -23,7 +22,7 @@ type ListSessionsInput struct {
 func registerListSessions(srv *sdkmcp.Server, deps *Deps) {
 	sdkmcp.AddTool[ListSessionsInput, Result](srv, &sdkmcp.Tool{
 		Name:        "list_sessions",
-		Description: "List Disbug sessions with optional source, status, and project filters.",
+		Description: "List Disbug sessions with optional status and project filters.",
 	}, func(
 		ctx context.Context,
 		_ *sdkmcp.CallToolRequest,
@@ -33,18 +32,7 @@ func registerListSessions(srv *sdkmcp.Server, deps *Deps) {
 		if err != nil {
 			return nil, nil, toolErr(err)
 		}
-		if source == sourceLocal || (source == sourceAuto && deps != nil && !deps.CloudAvailable && deps.LocalStore != nil) {
-			store, err := requireLocal(deps)
-			if err != nil {
-				return nil, nil, errors.New(err.Error())
-			}
-			resp, err := store.ListSessions(ctx, listOptions(in.Limit))
-			if err != nil {
-				return nil, nil, errors.New(err.Error())
-			}
-			result := resultFrom(resp)
-			return jsonResult(result), result, nil
-		}
+		_ = source
 		if err := requireCloud(deps); err != nil {
 			return nil, nil, toolErr(err)
 		}
@@ -69,10 +57,6 @@ func registerListSessions(srv *sdkmcp.Server, deps *Deps) {
 		result := resultFrom(resp)
 		return jsonResult(result), result, nil
 	})
-}
-
-func listOptions(limit int) localstore.ListOptions {
-	return localstore.ListOptions{Limit: limit}
 }
 
 func resultFrom(value any) Result {

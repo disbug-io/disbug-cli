@@ -32,18 +32,16 @@ type CLI struct {
 	Pins     PinsCmd     `cmd:"" name:"pins" help:"Fetch pins by report URL."`
 	Search   SearchCmd   `cmd:"" name:"search" help:"Search Disbug data."`
 	Watch    WatchCmd    `cmd:"" name:"watch" help:"Stream new sessions as events."`
+	Inspect  InspectCmd  `cmd:"" name:"inspect" help:"Inspect a downloaded local report JSON file."`
 
 	Login  LoginCmd  `cmd:"" name:"login" help:"Log in to Disbug."`
 	Logout LogoutCmd `cmd:"" name:"logout" help:"Log out of Disbug."`
 	Whoami WhoamiCmd `cmd:"" name:"whoami" help:"Show the current user."`
 	Doctor DoctorCmd `cmd:"" name:"doctor" help:"Check CLI configuration."`
 
-	MCP           MCPCmd           `cmd:"" name:"mcp" help:"Run MCP integration commands."`
-	NativeHost    NativeHostCmd    `cmd:"" name:"native-host" help:"Run the browser native messaging host."`
-	SetupLocal    SetupLocalCmd    `cmd:"" name:"setup-local" help:"Install local AI handoff support."`
-	LocalSessions LocalSessionsCmd `cmd:"" name:"local-sessions" help:"Manage local sessions."`
-	Completion    CompletionCmd    `cmd:"" name:"completion" help:"Generate shell completion scripts."`
-	VersionCmd    VersionCmd       `cmd:"" name:"version" help:"Print the disbug version."`
+	MCP        MCPCmd        `cmd:"" name:"mcp" help:"Run MCP integration commands."`
+	Completion CompletionCmd `cmd:"" name:"completion" help:"Generate shell completion scripts."`
+	VersionCmd VersionCmd    `cmd:"" name:"version" help:"Print the disbug version."`
 }
 
 type bindings struct {

@@ -15,7 +15,6 @@ import (
 
 	"github.com/disbug-io/disbug-cli/internal/client"
 	"github.com/disbug-io/disbug-cli/internal/errfmt"
-	"github.com/disbug-io/disbug-cli/internal/localstore"
 	"github.com/disbug-io/disbug-cli/internal/token"
 )
 
@@ -29,7 +28,6 @@ func SetVersion(s string) { versionStr = func() string { return s } }
 // Deps holds shared dependencies for MCP tool handlers.
 type Deps struct {
 	Client         *client.Client
-	LocalStore     *localstore.Store
 	Me             *client.Me
 	Stderr         io.Writer
 	CloudAvailable bool
@@ -77,17 +75,7 @@ func run(ctx context.Context, profile string, stderr io.Writer, serveFn serveFun
 		}
 	}
 
-	local, localErr := localstore.Open("")
-	if localErr != nil {
-		writef(stderr, "warning: local store unavailable: %s\n", localErr)
-	}
-	if local != nil {
-		defer func() {
-			_ = local.Close()
-		}()
-	}
-
-	deps := &Deps{Client: cli, LocalStore: local, Me: me, Stderr: stderr, CloudAvailable: tok.Token != ""}
+	deps := &Deps{Client: cli, Me: me, Stderr: stderr, CloudAvailable: tok.Token != ""}
 	srv := newServer(deps)
 
 	serveCtx, cancel := context.WithCancel(ctx)

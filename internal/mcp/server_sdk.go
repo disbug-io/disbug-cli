@@ -19,7 +19,7 @@ func newServer(deps *Deps) *mcp.Server {
 	if deps == nil {
 		deps = &Deps{}
 	}
-	if deps.Client != nil && deps.LocalStore == nil && !deps.CloudAvailable {
+	if deps.Client != nil && !deps.CloudAvailable {
 		deps.CloudAvailable = true
 	}
 	srv := mcp.NewServer(&mcp.Implementation{
@@ -32,9 +32,9 @@ func newServer(deps *Deps) *mcp.Server {
 	registerGetSession(srv, deps)
 	registerGetPin(srv, deps)
 	registerGetPins(srv, deps)
+	registerInspectLocalReport(srv, deps)
 	registerSearchSessions(srv, deps)
 	registerSearchPins(srv, deps)
-	registerGetLatestLocalSession(srv, deps)
 
 	return srv
 }

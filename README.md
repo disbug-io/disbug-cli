@@ -2,7 +2,7 @@
 
 Disbug CLI and MCP server for AI coding agents.
 
-A single Go binary that reads bug-report sessions from your team's Disbug instance. Use it from your terminal, or hook it into Claude Desktop / Claude Code / Codex / OpenClaw / Hermes / Cursor as an MCP server.
+A single Go binary that reads bug-report sessions from your team's Disbug instance, plus downloaded local report JSON files. Use it from your terminal, or hook it into Claude Desktop / Claude Code / Codex / OpenClaw / Hermes / Cursor as an MCP server.
 
 ## Install
 
@@ -31,11 +31,26 @@ disbug whoami                # confirms identity + capabilities
 disbug sessions --status open
 disbug session https://app.disbug.io/acme/projects/2/sessions/5/
 disbug pin 'https://app.disbug.io/acme/projects/2/sessions/5/?pin=1' --fields console,network
+disbug inspect ./disbug-report-example.json
 ```
+
+### Inspect a downloaded local report
+
+The Chrome extension can download a self-contained local report JSON when a user does not want to save a session to cloud. Inspect it without dumping screenshots or replay bytes into the terminal:
+
+```bash
+disbug inspect ./disbug-report-example.json
+disbug inspect ./disbug-report-example.json --pin 2 --fields console,network
+disbug inspect ./disbug-report-example.json --pin 2 --fields screenshot,replay
+```
+
+`screenshot` and `replay` fields are decoded to local cache file paths only when requested. The default summary prints pin feedback, URLs, artifact availability, and log counts.
 
 ### Use as an MCP server
 
-Disbug exposes read-only MCP tools for cloud and local reports: `whoami`, `list_sessions`, `get_session`, `get_pin`, `get_pins`, `search_sessions`, `search_pins`, and `get_latest_local_session`.
+Disbug exposes read-only MCP tools for cloud reports: `whoami`, `list_sessions`, `get_session`, `get_pin`, `get_pins`, `search_sessions`, and `search_pins`.
+
+For downloaded local report JSON files, use `inspect_local_report` with a filesystem path. It returns the same lightweight summary as `disbug inspect`, and can inspect a single pin with selected fields without needing native host setup or a cloud upload.
 
 Agent setup recipes:
 
@@ -45,26 +60,6 @@ Agent setup recipes:
 - [Cursor](docs/integrations/cursor.md)
 - [Hermes](docs/integrations/hermes.md)
 - [OpenClaw](docs/integrations/openclaw.md)
-
-### Enable local AI handoff from the browser extension
-
-The Chrome/Brave extension can copy reports directly into a local store that `disbug mcp` can read without uploading to Disbug cloud.
-
-```bash
-disbug setup-local --extension-id <chrome-extension-id>
-```
-
-The command installs Chrome/Brave/Chromium native messaging manifests for `io.disbug.bridge`, registers Disbug MCP where supported, and installs the `disbug-local` agent skill for Codex/Claude skill folders when present. The extension shows the exact command with its runtime extension id after the first markdown copy fallback.
-
-Manage local reports:
-
-```bash
-disbug local-sessions list
-disbug local-sessions show local_...
-disbug local-sessions delete local_...
-disbug local-sessions prune --older-than 30d
-disbug local-sessions path
-```
 
 ### Multi-profile
 
