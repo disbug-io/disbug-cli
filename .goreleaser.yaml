@@ -42,6 +42,7 @@ brews:
     license: MIT
     install: |
       bin.install "disbug"
+      generate_completions_from_executable(bin/"disbug", "completion")
     test: |
       system "#{bin}/disbug --version"
 
