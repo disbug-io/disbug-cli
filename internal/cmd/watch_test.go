@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -114,11 +115,11 @@ func TestWatchLocalOnlyFlagIsNotSupported(t *testing.T) {
 }
 
 func TestWatchCloudOnlyBackfillsAndPollsCloudSessions(t *testing.T) {
-	var listRequests int
+	var listRequests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/sessions/":
-			listRequests++
+			listRequests.Add(1)
 			if got := r.URL.Query().Get("created_at_after"); got == "" {
 				t.Fatal("created_at_after query is empty")
 			}
@@ -202,8 +203,8 @@ func TestWatchCloudOnlyBackfillsAndPollsCloudSessions(t *testing.T) {
 	if got := strings.Count(output, `"id":"abb/projects/2/sessions/5"`); got != 1 {
 		t.Fatalf("cloud session emitted %d times, want once; stdout=%q", got, output)
 	}
-	if listRequests < 2 {
-		t.Fatalf("listRequests = %d, want backfill and live poll", listRequests)
+	if got := listRequests.Load(); got < 2 {
+		t.Fatalf("listRequests = %d, want backfill and live poll", got)
 	}
 	if got := stderr.String(); !strings.Contains(got, "watching: cloud") {
 		t.Fatalf("stderr = %q, want cloud startup line", got)

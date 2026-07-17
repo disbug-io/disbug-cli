@@ -92,6 +92,8 @@ make ci
 
 The pre-commit hook runs `make fmt-check` and `make lint`.
 
+For release and package publishing, see [docs/release.md](docs/release.md).
+
 ## License
 
 MIT - see LICENSE.
