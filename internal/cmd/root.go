@@ -31,7 +31,7 @@ type CLI struct {
 	Pin      PinCmd      `cmd:"" name:"pin" help:"Show a pin by report URL."`
 	Pins     PinsCmd     `cmd:"" name:"pins" help:"Fetch pins by report URL."`
 	Search   SearchCmd   `cmd:"" name:"search" help:"Search Disbug data."`
-	Watch    WatchCmd    `cmd:"" name:"watch" help:"Stream new sessions as events."`
+	Watch    WatchCmd    `cmd:"" name:"watch" help:"Print new session notifications."`
 	Inspect  InspectCmd  `cmd:"" name:"inspect" help:"Inspect a downloaded local report JSON file."`
 
 	Login  LoginCmd  `cmd:"" name:"login" help:"Log in to Disbug."`

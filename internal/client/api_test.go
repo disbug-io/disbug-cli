@@ -36,19 +36,24 @@ func TestListSessions(t *testing.T) {
 		if got, want := query.Get("created_at_after"), "2026-05-23T09:30:00Z"; got != want {
 			t.Fatalf("created_at_after query = %q, want %q", got, want)
 		}
+		if got, want := query.Get("include"), "pins"; got != want {
+			t.Fatalf("include query = %q, want %q", got, want)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{
 			"results":[{
-				"id":123,
+				"title":"Checkout button fails",
 				"team_slug":"acme",
 				"project":{"id":42,"slug":"42","name":"Website"},
 				"project_session_number":5,
 				"report_url":"https://app.disbug.test/acme/projects/42/sessions/5/",
 				"url":"https://example.test/page",
 				"status":"open",
-				"pin_count":2,
-				"first_pin_feedback":"broken button",
+				"pins":[
+					{"number":1,"feedback":"broken button"},
+					{"number":2,"feedback":"console shows a 500"}
+				],
 				"reporter":{"email":"r@example.test","display_name":"Reporter"},
 				"updated_at":"2026-05-01T12:00:00Z",
 				"free_tier_locked":true
@@ -68,6 +73,7 @@ func TestListSessions(t *testing.T) {
 		Limit:          25,
 		Cursor:         "next-1",
 		CreatedAtAfter: "2026-05-23T09:30:00Z",
+		IncludePins:    true,
 	})
 	if err != nil {
 		t.Fatalf("ListSessions() error = %v, want nil", err)
@@ -81,8 +87,14 @@ func TestListSessions(t *testing.T) {
 	if got, want := resp.Results[0].Reporter.Email, "r@example.test"; got != want {
 		t.Fatalf("Reporter.Email = %q, want %q", got, want)
 	}
-	if got, want := resp.Results[0].FirstPinFeedback, "broken button"; got != want {
-		t.Fatalf("FirstPinFeedback = %q, want %q", got, want)
+	if got, want := resp.Results[0].Title, "Checkout button fails"; got != want {
+		t.Fatalf("Title = %q, want %q", got, want)
+	}
+	if got, want := len(resp.Results[0].Pins), 2; got != want {
+		t.Fatalf("len(Pins) = %d, want %d", got, want)
+	}
+	if got, want := resp.Results[0].Pins[1].Feedback, "console shows a 500"; got != want {
+		t.Fatalf("Pins[1].Feedback = %q, want %q", got, want)
 	}
 	if resp.NextCursor == nil || *resp.NextCursor != "next-2" {
 		t.Fatalf("NextCursor = %v, want next-2", resp.NextCursor)

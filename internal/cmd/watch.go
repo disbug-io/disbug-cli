@@ -30,29 +30,17 @@ type WatchCmd struct {
 }
 
 type watchEvent struct {
-	Type      string       `json:"type"`
-	Source    string       `json:"source"`
-	Backfill  bool         `json:"backfill"`
-	EmittedAt string       `json:"emitted_at"`
-	Session   watchSession `json:"session"`
-}
-
-type watchSession struct {
-	ID        string     `json:"id"`
-	Ref       string     `json:"ref"`
-	URL       string     `json:"url,omitempty"`
+	ReportURL string     `json:"report_url"`
+	Title     string     `json:"title"`
 	CreatedAt string     `json:"created_at"`
-	Status    string     `json:"status"`
-	Project   string     `json:"project,omitempty"`
-	SourceURL string     `json:"source_url,omitempty"`
-	PinCount  int        `json:"pin_count"`
 	Pins      []watchPin `json:"pins"`
+	id        string
+	backfill  bool
 }
 
 type watchPin struct {
-	PinNumber int    `json:"pin_number"`
-	Feedback  string `json:"feedback"`
-	URL       string `json:"url,omitempty"`
+	Number   int    `json:"number"`
+	Feedback string `json:"feedback"`
 }
 
 type cloudWatchOptions struct {
@@ -69,7 +57,7 @@ type watchEmitter struct {
 	exec   string
 }
 
-// Run streams session.new events until the context is cancelled.
+// Run streams new session events until the context is cancelled.
 func (c *WatchCmd) Run(ctx context.Context, b bindings) error {
 	cloudClient, _, err := newAuthenticatedClient(b.Flags)
 	if err != nil {
@@ -104,11 +92,11 @@ func (c *WatchCmd) Run(ctx context.Context, b bindings) error {
 	now := func() time.Time {
 		return time.Now().UTC()
 	}
-	var liveSince time.Time
+	startedAt := now()
 	if sinceDuration > 0 {
-		liveSince = now().Add(-sinceDuration)
+		backfillSince := startedAt.Add(-sinceDuration)
 		events, err := cloudBackfillEvents(ctx, cloudClient, cloudWatchOptions{
-			Since:   liveSince,
+			Since:   backfillSince,
 			Status:  c.Status,
 			Project: c.Project,
 			Now:     now,
@@ -119,13 +107,9 @@ func (c *WatchCmd) Run(ctx context.Context, b bindings) error {
 		if err := emitNewWatchEvents(ctx, events, dedupe, emitter); err != nil {
 			return err
 		}
-	} else {
-		if err := seedCloudDedupe(ctx, cloudClient, c.Status, c.Project, dedupe); err != nil {
-			return err
-		}
 	}
 
-	return watchCloudPoll(ctx, cloudClient, cloudWatchOptions{Since: liveSince, Status: c.Status, Project: c.Project, Now: now}, pollInterval, dedupe, emitter)
+	return watchCloudPoll(ctx, cloudClient, cloudWatchOptions{Since: startedAt, Status: c.Status, Project: c.Project, Now: now}, pollInterval, dedupe, emitter)
 }
 
 func parseWatchPollInterval(raw string) (time.Duration, error) {
@@ -168,9 +152,10 @@ func cloudEvents(
 	backfill bool,
 ) ([]watchEvent, error) {
 	params := &client.ListSessionsParams{
-		Status:  opts.Status,
-		Project: opts.Project,
-		Limit:   100,
+		Status:      opts.Status,
+		Project:     opts.Project,
+		Limit:       100,
+		IncludePins: true,
 	}
 	if !opts.Since.IsZero() {
 		params.CreatedAtAfter = opts.Since.UTC().Format(time.RFC3339)
@@ -180,15 +165,9 @@ func cloudEvents(
 		return nil, err
 	}
 
-	now := opts.Now
-	if now == nil {
-		now = func() time.Time {
-			return time.Now().UTC()
-		}
-	}
 	events := make([]watchEvent, 0, len(resp.Results))
 	for _, summary := range resp.Results {
-		event, err := cloudWatchEvent(ctx, cli, summary, backfill, now())
+		event, err := cloudWatchEvent(summary, backfill)
 		if err != nil {
 			return nil, err
 		}
@@ -198,35 +177,23 @@ func cloudEvents(
 }
 
 func cloudWatchEvent(
-	ctx context.Context,
-	cli *client.Client,
 	summary client.SessionSummary,
 	backfill bool,
-	emittedAt time.Time,
 ) (watchEvent, error) {
-	sessionRef, err := summary.SessionRef()
-	if err != nil {
-		return watchEvent{}, err
-	}
-	detail, err := cli.GetSession(ctx, sessionRef)
+	_, err := summary.SessionRef()
 	if err != nil {
 		return watchEvent{}, err
 	}
 
-	pins := make([]watchPin, 0, len(detail.Pins))
-	for _, pin := range detail.Pins {
-		pinURL := ""
-		if pin.URL != nil {
-			pinURL = *pin.URL
-		}
+	pins := make([]watchPin, 0, len(summary.Pins))
+	for _, pin := range summary.Pins {
 		pins = append(pins, watchPin{
-			PinNumber: int(pin.Number),
-			Feedback:  pin.Feedback,
-			URL:       pinURL,
+			Number:   int(pin.Number),
+			Feedback: pin.Feedback,
 		})
 	}
 	sort.SliceStable(pins, func(i, j int) bool {
-		return pins[i].PinNumber < pins[j].PinNumber
+		return pins[i].Number < pins[j].Number
 	})
 
 	id := summary.ScopedID()
@@ -234,64 +201,15 @@ func cloudWatchEvent(
 	if createdAt == "" {
 		createdAt = summary.UpdatedAt
 	}
-	if createdAt == "" {
-		createdAt = detail.UpdatedAt
-	}
-	status := summary.Status
-	if status == "" {
-		status = detail.Status
-	}
-	project := ""
-	if summary.Project != nil {
-		project = summary.Project.Slug
-	} else if detail.Project != nil {
-		project = detail.Project.Slug
-	}
-	sourceURL := summary.URL
-	if sourceURL == "" {
-		sourceURL = detail.URL
-	}
-	reportURL := summary.ReportURL
-	if reportURL == "" {
-		reportURL = detail.ReportURL
-	}
-	pinCount := summary.PinCount
-	if pinCount == 0 {
-		pinCount = len(pins)
-	}
 
 	return watchEvent{
-		Type:      "session.new",
-		Source:    "cloud",
-		Backfill:  backfill,
-		EmittedAt: emittedAt.UTC().Format(time.RFC3339),
-		Session: watchSession{
-			ID:        id,
-			Ref:       reportURL,
-			URL:       reportURL,
-			CreatedAt: createdAt,
-			Status:    status,
-			Project:   project,
-			SourceURL: sourceURL,
-			PinCount:  pinCount,
-			Pins:      pins,
-		},
+		ReportURL: summary.ReportURL,
+		Title:     summary.Title,
+		CreatedAt: createdAt,
+		Pins:      pins,
+		id:        id,
+		backfill:  backfill,
 	}, nil
-}
-
-func seedCloudDedupe(ctx context.Context, cli *client.Client, status string, project string, dedupe map[string]bool) error {
-	resp, err := cli.ListSessions(ctx, &client.ListSessionsParams{
-		Status:  status,
-		Project: project,
-		Limit:   100,
-	})
-	if err != nil {
-		return err
-	}
-	for _, summary := range resp.Results {
-		dedupe[dedupeKey("cloud", summary.ScopedID())] = true
-	}
-	return nil
 }
 
 func watchCloudPoll(
@@ -310,6 +228,10 @@ func watchCloudPoll(
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
+			pollStartedAt := time.Now().UTC()
+			if opts.Now != nil {
+				pollStartedAt = opts.Now()
+			}
 			events, err := cloudLiveEvents(ctx, cli, opts)
 			if err != nil {
 				if watchContextDone(ctx, err) {
@@ -321,19 +243,20 @@ func watchCloudPoll(
 			if err := emitNewWatchEvents(ctx, events, dedupe, emitter); err != nil {
 				return err
 			}
+			opts.Since = pollStartedAt
 		}
 	}
 }
 
 func sortWatchEvents(events []watchEvent) {
 	sort.SliceStable(events, func(i, j int) bool {
-		return events[i].Session.CreatedAt < events[j].Session.CreatedAt
+		return events[i].CreatedAt < events[j].CreatedAt
 	})
 }
 
 func emitNewWatchEvents(ctx context.Context, events []watchEvent, dedupe map[string]bool, emitter watchEmitter) error {
 	for _, event := range events {
-		key := dedupeKey(event.Source, event.Session.ID)
+		key := event.id
 		if dedupe[key] {
 			continue
 		}
@@ -347,10 +270,6 @@ func emitNewWatchEvents(ctx context.Context, events []watchEvent, dedupe map[str
 
 func watchContextDone(ctx context.Context, err error) bool {
 	return ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
-}
-
-func dedupeKey(source string, id string) string {
-	return source + ":" + id
 }
 
 func (e watchEmitter) emit(ctx context.Context, event watchEvent) error {
@@ -377,7 +296,7 @@ func (e watchEmitter) emit(ctx context.Context, event watchEvent) error {
 		}
 	}
 
-	if e.exec != "" && !event.Backfill {
+	if e.exec != "" && !event.backfill {
 		e.runExec(ctx, event, string(data))
 	}
 	return nil
@@ -385,33 +304,31 @@ func (e watchEmitter) emit(ctx context.Context, event watchEvent) error {
 
 func textWatchEvent(event watchEvent) string {
 	firstFeedback := ""
-	if len(event.Session.Pins) > 0 {
-		firstFeedback = event.Session.Pins[0].Feedback
+	if len(event.Pins) > 0 {
+		firstFeedback = event.Pins[0].Feedback
 	}
 	if firstFeedback == "" {
 		firstFeedback = "(no pins)"
 	}
-	return fmt.Sprintf(
-		"[NEW %s] %s - %s (%d pins)",
-		event.Source,
-		event.Session.ID,
-		firstFeedback,
-		event.Session.PinCount,
-	)
+	title := event.Title
+	if title == "" {
+		title = event.ReportURL
+	}
+	return fmt.Sprintf("[NEW] %s - %s (%d pins)", title, firstFeedback, len(event.Pins))
 }
 
 func (e watchEmitter) runExec(ctx context.Context, event watchEvent, eventJSON string) {
 	command := osExec.CommandContext(ctx, "sh", "-c", e.exec) //nolint:gosec // --exec is an explicit user-provided shell hook.
 	command.Env = append(os.Environ(),
-		"DISBUG_EVENT_ID="+event.Session.ID,
-		"DISBUG_EVENT_SOURCE="+event.Source,
-		"DISBUG_EVENT_REF="+event.Session.Ref,
-		"DISBUG_EVENT_URL="+event.Session.URL,
+		"DISBUG_EVENT_ID="+event.id,
+		"DISBUG_EVENT_SOURCE=cloud",
+		"DISBUG_EVENT_REF="+event.ReportURL,
+		"DISBUG_EVENT_URL="+event.ReportURL,
 		"DISBUG_EVENT_JSON="+eventJSON,
 	)
 	command.Stdout = io.Discard
 	command.Stderr = e.stderr
 	if err := command.Run(); err != nil {
-		_, _ = fmt.Fprintf(e.stderr, "warning: --exec failed for %s: %v\n", event.Session.Ref, err)
+		_, _ = fmt.Fprintf(e.stderr, "warning: --exec failed for %s: %v\n", event.ReportURL, err)
 	}
 }

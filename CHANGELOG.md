@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- `disbug watch` now polls incrementally, prints a compact report URL/title/all-pin-feedback JSONL record, and no longer records an agent pickup while checking for new reports.
+
 ### Added
 - CLI: `login`, `logout`, `whoami`, `doctor`, `sessions`, `session`, `pin`, `pins`, `search`, `mcp`, `version`, `completion`
 - MCP server with 7 read-only tools: `whoami`, `list_sessions`, `get_session`, `get_pin`, `get_pins`, `search_sessions`, `search_pins`

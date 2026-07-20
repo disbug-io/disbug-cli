@@ -26,6 +26,7 @@ type Reporter struct {
 
 // SessionSummary is a compact session record returned by ListSessions.
 type SessionSummary struct {
+	Title                string    `json:"title,omitempty"`
 	TeamSlug             string    `json:"team_slug"`
 	Project              *Project  `json:"project"`
 	ProjectSessionNumber int64     `json:"project_session_number"`
@@ -33,6 +34,7 @@ type SessionSummary struct {
 	URL                  string    `json:"url"`
 	Status               string    `json:"status"`
 	PinCount             int       `json:"pin_count"`
+	Pins                 []PinLite `json:"pins,omitempty"`
 	FirstPinFeedback     string    `json:"first_pin_feedback"`
 	Reporter             *Reporter `json:"reporter"`
 	CreatedAt            string    `json:"created_at"`
@@ -48,6 +50,7 @@ type ListSessionsParams struct {
 	Cursor          string
 	CreatedAtAfter  string
 	CreatedAtBefore string
+	IncludePins     bool
 }
 
 // ListSessionsResponse is the paginated session list response.
@@ -105,6 +108,9 @@ func (c *Client) ListSessions(ctx context.Context, p *ListSessionsParams) (*List
 		}
 		if p.CreatedAtBefore != "" {
 			query.Set("created_at_before", p.CreatedAtBefore)
+		}
+		if p.IncludePins {
+			query.Set("include", "pins")
 		}
 		if encoded := query.Encode(); encoded != "" {
 			path += "?" + encoded

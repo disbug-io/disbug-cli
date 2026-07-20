@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -28,14 +29,11 @@ func TestWatchEmitterRunsExecForLiveEventWithEnvironment(t *testing.T) {
 	}
 
 	event := watchEvent{
-		Type:      "session.new",
-		Source:    "cloud",
-		Backfill:  false,
-		EmittedAt: "2026-05-23T08:24:43Z",
-		Session: watchSession{
-			ID:  "123",
-			Ref: "disbug://cloud/123",
-		},
+		ReportURL: "https://app.disbug.test/acme/projects/2/sessions/5/",
+		Title:     "Checkout button fails",
+		CreatedAt: "2026-05-23T08:24:43Z",
+		Pins:      []watchPin{{Number: 1, Feedback: "Button does nothing"}},
+		id:        "123",
 	}
 	if err := emitter.emit(context.Background(), event); err != nil {
 		t.Fatalf("emit() error = %v", err)
@@ -49,7 +47,7 @@ func TestWatchEmitterRunsExecForLiveEventWithEnvironment(t *testing.T) {
 	for _, want := range []string{
 		"DISBUG_EVENT_ID=123",
 		"DISBUG_EVENT_SOURCE=cloud",
-		"DISBUG_EVENT_REF=disbug://cloud/123",
+		"DISBUG_EVENT_REF=https://app.disbug.test/acme/projects/2/sessions/5/",
 		"DISBUG_EVENT_JSON=",
 	} {
 		if !strings.Contains(envText, want) {
@@ -59,8 +57,13 @@ func TestWatchEmitterRunsExecForLiveEventWithEnvironment(t *testing.T) {
 	if got := stderr.String(); got != "" {
 		t.Fatalf("stderr = %q, want empty", got)
 	}
-	if got := stdout.String(); !strings.Contains(got, `"type":"session.new"`) {
+	if got := stdout.String(); !strings.Contains(got, `"title":"Checkout button fails"`) {
 		t.Fatalf("stdout = %q, want JSONL event", got)
+	}
+	for _, unwanted := range []string{`"type"`, `"pin_count"`, `"source"`} {
+		if got := stdout.String(); strings.Contains(got, unwanted) {
+			t.Fatalf("stdout = %q, does not want %s", got, unwanted)
+		}
 	}
 }
 
@@ -76,14 +79,11 @@ func TestWatchEmitterDoesNotRunExecForBackfillEvent(t *testing.T) {
 	}
 
 	event := watchEvent{
-		Type:      "session.new",
-		Source:    "cloud",
-		Backfill:  true,
-		EmittedAt: "2026-05-23T08:24:43Z",
-		Session: watchSession{
-			ID:  "123",
-			Ref: "disbug://cloud/123",
-		},
+		ReportURL: "https://app.disbug.test/acme/projects/2/sessions/5/",
+		Title:     "Checkout button fails",
+		CreatedAt: "2026-05-23T08:24:43Z",
+		id:        "123",
+		backfill:  true,
 	}
 	if err := emitter.emit(context.Background(), event); err != nil {
 		t.Fatalf("emit() error = %v", err)
@@ -116,12 +116,18 @@ func TestWatchLocalOnlyFlagIsNotSupported(t *testing.T) {
 
 func TestWatchCloudOnlyBackfillsAndPollsCloudSessions(t *testing.T) {
 	var listRequests atomic.Int32
+	var createdAtAfterMu sync.Mutex
+	var createdAtAfter []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/sessions/":
 			listRequests.Add(1)
 			if got := r.URL.Query().Get("created_at_after"); got == "" {
 				t.Fatal("created_at_after query is empty")
+			} else {
+				createdAtAfterMu.Lock()
+				createdAtAfter = append(createdAtAfter, got)
+				createdAtAfterMu.Unlock()
 			}
 			if got, want := r.URL.Query().Get("status"), "open"; got != want {
 				t.Fatalf("status query = %q, want %q", got, want)
@@ -129,18 +135,20 @@ func TestWatchCloudOnlyBackfillsAndPollsCloudSessions(t *testing.T) {
 			if got, want := r.URL.Query().Get("project"), "web"; got != want {
 				t.Fatalf("project query = %q, want %q", got, want)
 			}
+			if got, want := r.URL.Query().Get("include"), "pins"; got != want {
+				t.Fatalf("include query = %q, want %q", got, want)
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = io.WriteString(w, `{
 				"results":[{
-					"id":123,
+					"title":"Checkout button fails",
 					"team_slug":"abb",
 					"project":{"id":2,"slug":"2","name":"Website"},
 					"project_session_number":5,
 					"report_url":"https://staging.disbug.us/abb/projects/2/sessions/5/",
 					"url":"https://example.test/page",
 					"status":"open",
-					"pin_count":1,
-					"first_pin_feedback":"cloud feedback",
+					"pins":[{"number":1,"feedback":"cloud feedback"}],
 					"reporter":{"email":"r@example.test","display_name":"Reporter"},
 					"created_at":"2026-05-23T08:20:00Z",
 					"updated_at":"2026-05-23T08:21:00Z",
@@ -149,20 +157,6 @@ func TestWatchCloudOnlyBackfillsAndPollsCloudSessions(t *testing.T) {
 				"next_cursor":null,
 				"count":1,
 				"free_tier_truncated":false
-			}`)
-		case "/api/teams/abb/projects/2/sessions/5/":
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(w, `{
-				"id":123,
-				"team_slug":"abb",
-				"project_session_number":5,
-				"status":"open",
-				"project":{"id":2,"slug":"2","name":"Website"},
-				"reporter":{"email":"r@example.test","display_name":"Reporter"},
-				"report_url":"https://staging.disbug.us/abb/projects/2/sessions/5/",
-				"url":"https://example.test/page",
-				"updated_at":"2026-05-23T08:21:00Z",
-				"pins":[{"id":456,"number":1,"feedback":"cloud feedback","url":"https://example.test/page#pin"}]
 			}`)
 		default:
 			t.Fatalf("unexpected request path %s", r.URL.Path)
@@ -188,23 +182,30 @@ func TestWatchCloudOnlyBackfillsAndPollsCloudSessions(t *testing.T) {
 
 	output := stdout.String()
 	for _, want := range []string{
-		`"source":"cloud"`,
-		`"backfill":true`,
-		`"id":"abb/projects/2/sessions/5"`,
-		`"ref":"https://staging.disbug.us/abb/projects/2/sessions/5/"`,
-		`"project":"2"`,
-		`"pin_number":1`,
+		`"report_url":"https://staging.disbug.us/abb/projects/2/sessions/5/"`,
+		`"title":"Checkout button fails"`,
+		`"number":1`,
 		`"feedback":"cloud feedback"`,
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("stdout = %q, want %q", output, want)
 		}
 	}
-	if got := strings.Count(output, `"id":"abb/projects/2/sessions/5"`); got != 1 {
+	if got := strings.Count(output, `"report_url":"https://staging.disbug.us/abb/projects/2/sessions/5/"`); got != 1 {
 		t.Fatalf("cloud session emitted %d times, want once; stdout=%q", got, output)
+	}
+	for _, unwanted := range []string{`"type"`, `"source"`, `"backfill"`, `"pin_count"`} {
+		if strings.Contains(output, unwanted) {
+			t.Fatalf("stdout = %q, does not want %s", output, unwanted)
+		}
 	}
 	if got := listRequests.Load(); got < 2 {
 		t.Fatalf("listRequests = %d, want backfill and live poll", got)
+	}
+	createdAtAfterMu.Lock()
+	defer createdAtAfterMu.Unlock()
+	if len(createdAtAfter) < 2 || createdAtAfter[0] == createdAtAfter[1] {
+		t.Fatalf("created_at_after queries = %v, want advancing live watermark", createdAtAfter)
 	}
 	if got := stderr.String(); !strings.Contains(got, "watching: cloud") {
 		t.Fatalf("stderr = %q, want cloud startup line", got)
