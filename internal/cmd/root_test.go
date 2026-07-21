@@ -48,15 +48,46 @@ func TestExecuteUnknownFlagReturnsUsageError(t *testing.T) {
 	assert.Empty(t, stdout.String())
 }
 
-func TestExecuteCompletionBashPlaceholder(t *testing.T) {
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
+func TestExecuteCompletionGeneratesShellScripts(t *testing.T) {
+	tests := []struct {
+		shell string
+		want  []string
+	}{
+		{
+			shell: "bash",
+			want:  []string{"_disbug_completion()", "complete -F _disbug_completion disbug"},
+		},
+		{
+			shell: "zsh",
+			want:  []string{"#compdef disbug", "_disbug_completion()", "compdef _disbug_completion disbug"},
+		},
+		{
+			shell: "fish",
+			want:  []string{"function __disbug_complete", "complete -c disbug -f -a"},
+		},
+		{
+			shell: "powershell",
+			want:  []string{"Register-ArgumentCompleter -Native -CommandName disbug", "$wordToComplete"},
+		},
+	}
 
-	err := Execute(context.Background(), []string{"completion", "bash"}, nil, &stdout, &stderr)
+	for _, tt := range tests {
+		t.Run(tt.shell, func(t *testing.T) {
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
 
-	require.NoError(t, err)
-	assert.Equal(t, "# disbug bash completion (placeholder; implemented in Phase 6)\n", stdout.String())
-	assert.Empty(t, stderr.String())
+			err := Execute(context.Background(), []string{"completion", tt.shell}, nil, &stdout, &stderr)
+
+			require.NoError(t, err)
+			for _, want := range tt.want {
+				assert.Contains(t, stdout.String(), want)
+			}
+			assert.Contains(t, stdout.String(), "sessions")
+			assert.Contains(t, stdout.String(), "mcp")
+			assert.NotContains(t, stdout.String(), "placeholder")
+			assert.Empty(t, stderr.String())
+		})
+	}
 }
 
 func TestExecuteMCPHelpIncludesCommand(t *testing.T) {

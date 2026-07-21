@@ -23,6 +23,17 @@ scoop install disbug
 
 Grab a binary for your OS/arch from [Releases](https://github.com/disbug-io/disbug-cli/releases) and put it on your PATH.
 
+### Shell completions
+
+Homebrew installs completions automatically. For direct installs, generate them with:
+
+```bash
+disbug completion bash
+disbug completion zsh
+disbug completion fish
+disbug completion powershell
+```
+
 ## Quickstart
 
 ```bash
@@ -50,7 +61,7 @@ disbug inspect ./disbug-report-example.json --pin 2 --fields screenshot,replay
 
 Disbug exposes read-only MCP tools for cloud reports: `whoami`, `list_sessions`, `get_session`, `get_pin`, `get_pins`, `search_sessions`, and `search_pins`.
 
-For downloaded local report JSON files, use `inspect_local_report` with a filesystem path. It returns the same lightweight summary as `disbug inspect`, and can inspect a single pin with selected fields without needing native host setup or a cloud upload.
+For downloaded local report JSON files, use `inspect_local_report` with a filesystem path. It returns the same lightweight summary as `disbug inspect`, and can inspect a single pin with selected fields without needing a cloud upload.
 
 Agent setup recipes:
 
