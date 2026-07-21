@@ -201,14 +201,14 @@ components:
       name: team_slug
       in: path
       required: true
-      description: Team slug from the report URL.
+      description: Team slug from the session URL.
       schema:
         type: string
     ProjectID:
       name: project_id
       in: path
       required: true
-      description: Project identifier from the report URL.
+      description: Project identifier from the session URL.
       schema:
         type: integer
         minimum: 1
@@ -216,7 +216,7 @@ components:
       name: session_number
       in: path
       required: true
-      description: Project-scoped session number from the report URL.
+      description: Project-scoped session number from the session URL.
       schema:
         type: integer
         minimum: 1

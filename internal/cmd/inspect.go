@@ -10,9 +10,9 @@ import (
 	"github.com/disbug-io/disbug-cli/internal/ref"
 )
 
-// InspectCmd reads a downloaded local Disbug report JSON file.
+// InspectCmd reads a downloaded local Disbug session JSON file.
 type InspectCmd struct {
-	Path     string `arg:"" name:"path" help:"Path to a downloaded Disbug local report JSON file."`
+	Path     string `arg:"" name:"path" help:"Path to a downloaded Disbug local session JSON file."`
 	Pin      int    `help:"Inspect one pin by number instead of returning the session summary."`
 	Fields   string `help:"Comma-separated fields for --pin: screenshot,console,network,events,replay,voice_note,video,all."`
 	CacheDir string `name:"cache-dir" help:"Directory for decoded local artifacts. Defaults to the user cache directory."`
@@ -24,7 +24,7 @@ type inspectPinOutput struct {
 	Pin    localbundle.PinInspect `json:"pin"`
 }
 
-// Run prints compact local report data, decoding heavy artifacts only when requested.
+// Run prints compact local session data, decoding heavy artifacts only when requested.
 func (c *InspectCmd) Run(_ context.Context, b bindings) error {
 	bundle, err := localbundle.Load(c.Path)
 	if err != nil {

@@ -13,10 +13,10 @@ import (
 
 // GetSessionInput is the input for the get_session MCP tool.
 type GetSessionInput struct {
-	Target  string `json:"target,omitempty" jsonschema:"Disbug report URL"`
-	URL     string `json:"url,omitempty" jsonschema:"Disbug report URL"`
-	ID      string `json:"id,omitempty" jsonschema:"Disbug report URL"`
-	Session string `json:"session,omitempty" jsonschema:"Disbug report URL"`
+	Target  string `json:"target,omitempty" jsonschema:"Disbug session URL"`
+	URL     string `json:"url,omitempty" jsonschema:"Disbug session URL"`
+	ID      string `json:"id,omitempty" jsonschema:"Disbug session URL"`
+	Session string `json:"session,omitempty" jsonschema:"Disbug session URL"`
 	Source  string `json:"source,omitempty" jsonschema:"Source: auto or cloud"`
 }
 

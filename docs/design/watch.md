@@ -5,7 +5,7 @@ Print new cloud Disbug sessions as JSON lines on stdout. The command is intended
 1. Agent teammates that monitor new Disbug sessions and notify a lead agent.
 2. Shell users who want an `--exec` hook for inbox files, Slack handoff, or cron-style processing.
 
-The CLI emits report notifications only. It does not fetch full report details, mark reports as read, or know how to wake a coding agent.
+The CLI emits session notifications only. It does not fetch full session details, mark sessions as read, or know how to wake a coding agent.
 
 ## Synopsis
 
@@ -56,9 +56,9 @@ Stdout is one JSON object per line. Flush after every write.
 }
 ```
 
-- Each line represents one new report, so no event type or source wrapper is needed.
+- Each line represents one new session, so no event type or source wrapper is needed.
 - `pins` contains every pin's number and feedback, ordered by pin number. It intentionally excludes artifacts and metadata.
-- `report_url` can be passed directly to `disbug session <report_url>` when the active agent decides to pick up the report.
+- `report_url` is the backward-compatible wire field for the session URL. Pass it directly to `disbug session <session_url>` when the active agent decides to pick up the session.
 - `--since` output uses the same shape. The CLI still suppresses `--exec` for those backfill lines.
 
 ## Text Format
@@ -77,7 +77,7 @@ JSONL is the canonical machine contract.
 
 | Variable | Value |
 |---|---|
-| `DISBUG_EVENT_ID` | Stable scoped report identifier |
+| `DISBUG_EVENT_ID` | Stable scoped session identifier |
 | `DISBUG_EVENT_SOURCE` | `cloud` |
 | `DISBUG_EVENT_REF` | `report_url` |
 | `DISBUG_EVENT_URL` | `report_url` |
@@ -93,7 +93,7 @@ Rules:
 
 The command polls the sessions API on `--poll-interval` (default `30s`). Each successful poll advances the `created_at_after` watermark, so later polls request only sessions created during the next interval. A small in-memory ID set removes overlap duplicates.
 
-The list request asks for title, report URL, and all pin feedbacks in one lightweight response. It never calls the full session-detail endpoint; only an explicit `disbug session <report_url>` or MCP read records an agent pickup.
+The list request asks for title, session URL, and all pin feedback in one lightweight response. It never calls the full session-detail endpoint; only an explicit `disbug session <session_url>` or MCP read records an agent pickup.
 
 ## Out Of Scope
 

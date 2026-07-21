@@ -104,6 +104,46 @@ func TestListSessions(t *testing.T) {
 	}
 }
 
+func TestResolveSession(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got, want := r.Method, http.MethodPost; got != want {
+			t.Fatalf("method = %q, want %q", got, want)
+		}
+		if got, want := r.URL.Path, "/api/teams/acme/projects/42/sessions/5/resolve/"; got != want {
+			t.Fatalf("path = %q, want %q", got, want)
+		}
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if got, want := body["summary"], "Fixed checkout and ran the regression test."; got != want {
+			t.Fatalf("summary = %q, want %q", got, want)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{
+			"team_slug":"acme",
+			"project":{"id":42,"slug":"42","name":"Website"},
+			"project_session_number":5,
+			"report_url":"https://app.disbug.io/acme/projects/42/sessions/5/",
+			"status":"resolved",
+			"url":"https://example.test/checkout",
+			"updated_at":"2026-07-20T00:00:00Z",
+			"pins":[]
+		}`)
+	}))
+	t.Cleanup(server.Close)
+
+	c := New(server.URL, "t", "test", nil, server.Client(), nil)
+	resp, err := c.ResolveSession(context.Background(), testSessionRef, "Fixed checkout and ran the regression test.")
+	if err != nil {
+		t.Fatalf("ResolveSession() error = %v, want nil", err)
+	}
+	if got, want := resp.Status, "resolved"; got != want {
+		t.Fatalf("Status = %q, want %q", got, want)
+	}
+}
+
 func TestListSessionsDecodesNullableProjectAndReporter(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
