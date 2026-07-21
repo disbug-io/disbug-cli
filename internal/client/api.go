@@ -1,7 +1,9 @@
 package client
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -26,6 +28,7 @@ type Reporter struct {
 
 // SessionSummary is a compact session record returned by ListSessions.
 type SessionSummary struct {
+	Title                string    `json:"title,omitempty"`
 	TeamSlug             string    `json:"team_slug"`
 	Project              *Project  `json:"project"`
 	ProjectSessionNumber int64     `json:"project_session_number"`
@@ -33,6 +36,7 @@ type SessionSummary struct {
 	URL                  string    `json:"url"`
 	Status               string    `json:"status"`
 	PinCount             int       `json:"pin_count"`
+	Pins                 []PinLite `json:"pins,omitempty"`
 	FirstPinFeedback     string    `json:"first_pin_feedback"`
 	Reporter             *Reporter `json:"reporter"`
 	CreatedAt            string    `json:"created_at"`
@@ -48,6 +52,7 @@ type ListSessionsParams struct {
 	Cursor          string
 	CreatedAtAfter  string
 	CreatedAtBefore string
+	IncludePins     bool
 }
 
 // ListSessionsResponse is the paginated session list response.
@@ -105,6 +110,9 @@ func (c *Client) ListSessions(ctx context.Context, p *ListSessionsParams) (*List
 		}
 		if p.CreatedAtBefore != "" {
 			query.Set("created_at_before", p.CreatedAtBefore)
+		}
+		if p.IncludePins {
+			query.Set("include", "pins")
 		}
 		if encoded := query.Encode(); encoded != "" {
 			path += "?" + encoded
@@ -219,6 +227,24 @@ func (s SessionSummary) ScopedID() string {
 func (c *Client) GetSession(ctx context.Context, sessionRef ref.SessionRef) (*SessionDetail, error) {
 	var session SessionDetail
 	if err := c.doJSON(ctx, http.MethodGet, scopedSessionPath(sessionRef), nil, &session); err != nil {
+		return nil, err
+	}
+
+	return &session, nil
+}
+
+// ResolveSession calls POST /api/teams/{team}/projects/{project}/sessions/{number}/resolve/.
+func (c *Client) ResolveSession(ctx context.Context, sessionRef ref.SessionRef, summary string) (*SessionDetail, error) {
+	body, err := json.Marshal(struct {
+		Summary string `json:"summary"`
+	}{Summary: summary})
+	if err != nil {
+		return nil, err
+	}
+
+	var session SessionDetail
+	path := scopedSessionPath(sessionRef) + "resolve/"
+	if err := c.doJSON(ctx, http.MethodPost, path, bytes.NewReader(body), &session); err != nil {
 		return nil, err
 	}
 

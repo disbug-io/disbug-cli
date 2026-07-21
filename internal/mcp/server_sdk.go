@@ -30,6 +30,7 @@ func newServer(deps *Deps) *mcp.Server {
 	registerWhoami(srv, deps)
 	registerListSessions(srv, deps)
 	registerGetSession(srv, deps)
+	registerResolveSession(srv, deps)
 	registerGetPin(srv, deps)
 	registerGetPins(srv, deps)
 	registerInspectLocalReport(srv, deps)

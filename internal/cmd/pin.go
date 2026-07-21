@@ -9,10 +9,10 @@ import (
 	"github.com/disbug-io/disbug-cli/internal/ref"
 )
 
-// PinCmd shows a single pin by report URL and pin number.
+// PinCmd shows a single pin by session URL and pin number.
 type PinCmd struct {
-	Ref    string `arg:"" name:"url" help:"Disbug report URL with ?pin=<number>."`
-	Pin    int64  `help:"Pin number when the report URL does not include ?pin=."`
+	Ref    string `arg:"" name:"url" help:"Disbug session URL with ?pin=<number>."`
+	Pin    int64  `help:"Pin number when the session URL does not include ?pin=."`
 	Fields string `help:"Comma-separated fields: screenshot,console,network,events,replay,voice_note,video,all" default:"all"`
 }
 

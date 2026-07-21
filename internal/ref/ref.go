@@ -8,7 +8,7 @@ import (
 	"unicode"
 )
 
-// SessionRef identifies a cloud Disbug session by the same scoped identity used in report URLs.
+// SessionRef identifies a cloud Disbug session by the same scoped identity used in session URLs.
 type SessionRef struct {
 	TeamSlug      string
 	ProjectID     int64
@@ -47,7 +47,7 @@ var wireFields = map[string]string{
 	"video":      "video_recording",
 }
 
-// ParseSession parses a Disbug report URL.
+// ParseSession parses a Disbug session URL.
 func ParseSession(arg string) (SessionRef, error) {
 	parsedURL, err := parseReportURL(arg)
 	if err != nil {
@@ -57,7 +57,7 @@ func ParseSession(arg string) (SessionRef, error) {
 	return parsedURL.Session, nil
 }
 
-// ParsePin parses a Disbug report URL with a pin query parameter.
+// ParsePin parses a Disbug session URL with a pin query parameter.
 func ParsePin(arg string) (PinRef, error) {
 	parsedURL, err := parseReportURL(arg)
 	if err != nil {
@@ -202,7 +202,7 @@ func parseReportURL(arg string) (parsedReportURL, error) {
 	}
 	u, err := url.Parse(value)
 	if err != nil || u.Scheme == "" || u.Host == "" {
-		return parsedReportURL{}, fmt.Errorf("expected Disbug report URL")
+		return parsedReportURL{}, fmt.Errorf("expected Disbug session URL")
 	}
 
 	parts := strings.Split(strings.Trim(u.EscapedPath(), "/"), "/")

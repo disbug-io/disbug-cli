@@ -13,9 +13,9 @@ import (
 
 // GetPinInput is the input for the get_pin MCP tool.
 type GetPinInput struct {
-	Target string   `json:"target,omitempty" jsonschema:"Disbug report URL with ?pin=<number>"`
-	URL    string   `json:"url,omitempty" jsonschema:"Disbug report URL with ?pin=<number>"`
-	Pin    string   `json:"pin,omitempty" jsonschema:"Disbug report URL with ?pin=<number>"`
+	Target string   `json:"target,omitempty" jsonschema:"Disbug session URL with ?pin=<number>"`
+	URL    string   `json:"url,omitempty" jsonschema:"Disbug session URL with ?pin=<number>"`
+	Pin    string   `json:"pin,omitempty" jsonschema:"Disbug session URL with ?pin=<number>"`
 	Source string   `json:"source,omitempty" jsonschema:"Source: auto or cloud"`
 	Fields []string `json:"fields,omitempty" jsonschema:"array of: screenshot console network events replay voice_note video all"`
 }
@@ -23,7 +23,7 @@ type GetPinInput struct {
 func registerGetPin(srv *sdkmcp.Server, deps *Deps) {
 	sdkmcp.AddTool[GetPinInput, Result](srv, &sdkmcp.Tool{
 		Name:        "get_pin",
-		Description: "Get a Disbug pin by report URL from cloud.",
+		Description: "Get a Disbug pin by session URL from cloud.",
 	}, func(
 		ctx context.Context,
 		_ *sdkmcp.CallToolRequest,

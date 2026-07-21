@@ -13,7 +13,7 @@ import (
 
 // InspectLocalReportInput is the input for the inspect_local_report MCP tool.
 type InspectLocalReportInput struct {
-	Path     string   `json:"path" jsonschema:"Path to a downloaded Disbug local report JSON file"`
+	Path     string   `json:"path" jsonschema:"Path to a downloaded Disbug local session JSON file"`
 	Pin      int      `json:"pin,omitempty" jsonschema:"Pin number to inspect; omit for a session summary"`
 	Fields   []string `json:"fields,omitempty" jsonschema:"array of: screenshot console network events replay voice_note video all"`
 	CacheDir string   `json:"cache_dir,omitempty" jsonschema:"Directory for decoded local artifacts"`
@@ -28,7 +28,7 @@ type inspectLocalReportPinOutput struct {
 func registerInspectLocalReport(srv *sdkmcp.Server, _ *Deps) {
 	sdkmcp.AddTool[InspectLocalReportInput, Result](srv, &sdkmcp.Tool{
 		Name: "inspect_local_report",
-		Description: "Inspect a downloaded local Disbug report JSON file by filesystem path. " +
+		Description: "Inspect a downloaded local Disbug session JSON file by filesystem path. " +
 			"Returns a lightweight summary by default; pass pin and fields to inspect pin artifacts.",
 	}, func(
 		_ context.Context,

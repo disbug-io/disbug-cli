@@ -15,7 +15,7 @@ import (
 	"strings"
 )
 
-// Bundle is a portable local Disbug report downloaded from the Chrome extension.
+// Bundle is a portable local Disbug session downloaded from the Chrome extension.
 type Bundle struct {
 	Path    string
 	hash    string
@@ -79,7 +79,7 @@ type reportLogs struct {
 	UserEvents  []map[string]any `json:"user_events"`
 }
 
-// Summary is the lightweight output for a local report.
+// Summary is the lightweight output for a local session.
 type Summary struct {
 	Source  string         `json:"source"`
 	Path    string         `json:"path"`
@@ -87,7 +87,7 @@ type Summary struct {
 	Pins    []PinSummary   `json:"pins"`
 }
 
-// SessionSummary is the session-level summary of a local report.
+// SessionSummary is the session-level summary of a local session.
 type SessionSummary struct {
 	ID        string `json:"id,omitempty"`
 	Status    string `json:"status,omitempty"`
@@ -96,7 +96,7 @@ type SessionSummary struct {
 	PinCount  int    `json:"pin_count"`
 }
 
-// PinSummary is the per-pin summary in a local report.
+// PinSummary is the per-pin summary in a local session.
 type PinSummary struct {
 	Number    int             `json:"number"`
 	Feedback  string          `json:"feedback,omitempty"`
@@ -114,7 +114,7 @@ type ArtifactSummary struct {
 	EventCount   int  `json:"event_count"`
 }
 
-// PinInspect is the field-selected output for one local report pin.
+// PinInspect is the field-selected output for one local session pin.
 type PinInspect struct {
 	Number        int              `json:"number"`
 	Feedback      string           `json:"feedback,omitempty"`
@@ -130,14 +130,14 @@ type PinInspect struct {
 	Events        []map[string]any `json:"events,omitempty"`
 }
 
-// LocalAsset describes a binary artifact (e.g. screenshot) extracted from a local report.
+// LocalAsset describes a binary artifact (e.g. screenshot) extracted from a local session.
 type LocalAsset struct {
 	Path        string `json:"path"`
 	ContentType string `json:"content_type,omitempty"`
 	SizeBytes   int64  `json:"size_bytes"`
 }
 
-// LocalReplayFile describes the rrweb replay artifact extracted from a local report.
+// LocalReplayFile describes the rrweb replay artifact extracted from a local session.
 type LocalReplayFile struct {
 	Path         string `json:"path"`
 	ContentType  string `json:"content_type,omitempty"`
@@ -148,19 +148,19 @@ type LocalReplayFile struct {
 	EndedAt      string `json:"ended_at,omitempty"`
 }
 
-// Load parses a portable local Disbug report JSON file.
+// Load parses a portable local Disbug session JSON file.
 func Load(reportPath string) (*Bundle, error) {
 	data, err := os.ReadFile(reportPath) //nolint:gosec // reportPath is the user-supplied local report file to inspect.
 	if err != nil {
-		return nil, fmt.Errorf("read local report: %w", err)
+		return nil, fmt.Errorf("read local session: %w", err)
 	}
 
 	var report reportPayload
 	if err := json.Unmarshal(data, &report); err != nil {
-		return nil, fmt.Errorf("parse local report: %w", err)
+		return nil, fmt.Errorf("parse local session: %w", err)
 	}
 	if len(report.Files) == 0 {
-		return nil, fmt.Errorf("local report has no files")
+		return nil, fmt.Errorf("local session has no files")
 	}
 
 	fileMap := make(map[string]reportFile, len(report.Files))
@@ -189,7 +189,7 @@ func Load(reportPath string) (*Bundle, error) {
 	}, nil
 }
 
-// Summary returns the source/session/pin summary for the local report.
+// Summary returns the source/session/pin summary for the local session.
 func (b *Bundle) Summary() (Summary, error) {
 	pins := make([]PinSummary, 0, len(b.report.Session.Pins))
 	for _, pin := range b.report.Session.Pins {
@@ -224,7 +224,7 @@ func (b *Bundle) Summary() (Summary, error) {
 	}, nil
 }
 
-// InspectPin returns the field-selected details for one pin in the local report.
+// InspectPin returns the field-selected details for one pin in the local session.
 func (b *Bundle) InspectPin(number int, fields []string, cacheDir string) (PinInspect, error) {
 	pin, ok := b.findPin(number)
 	if !ok {
@@ -282,7 +282,7 @@ func (b *Bundle) InspectPin(number int, fields []string, cacheDir string) (PinIn
 			}
 			result.SessionReplay = replay
 		case "voice_note", "video":
-			// Local v1 reports do not currently include these artifacts.
+			// Local v1 sessions do not currently include these artifacts.
 		}
 	}
 
@@ -483,11 +483,11 @@ func replayMeta(data []byte) replayMetadata {
 func cleanBundlePath(raw string) (string, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {
-		return "", fmt.Errorf("local report contains a file with no path")
+		return "", fmt.Errorf("local session contains a file with no path")
 	}
 	clean := path.Clean(strings.TrimPrefix(value, "/"))
 	if clean == "." || strings.HasPrefix(clean, "../") {
-		return "", fmt.Errorf("unsafe local report path %q", raw)
+		return "", fmt.Errorf("unsafe local session path %q", raw)
 	}
 	return clean, nil
 }

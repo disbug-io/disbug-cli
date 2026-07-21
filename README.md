@@ -2,14 +2,17 @@
 
 Disbug CLI and MCP server for AI coding agents.
 
-A single Go binary that reads bug-report sessions from your team's Disbug instance, plus downloaded local report JSON files. Use it from your terminal, or hook it into Claude Desktop / Claude Code / Codex / OpenClaw / Hermes / Cursor as an MCP server.
+A single Go binary that reads sessions from your team's Disbug instance, plus downloaded local session JSON files. Use it from your terminal, or hook it into Claude Desktop / Claude Code / Codex / OpenClaw / Hermes / Cursor as an MCP server.
 
 ## Install
+
+Use exactly one section that matches your operating system. After installation, run `disbug version` before continuing.
 
 ### macOS / Linux (Homebrew)
 
 ```bash
 brew install disbug-io/tap/disbug
+disbug version
 ```
 
 ### Windows (Scoop)
@@ -17,11 +20,8 @@ brew install disbug-io/tap/disbug
 ```powershell
 scoop bucket add disbug https://github.com/disbug-io/scoop-bucket
 scoop install disbug
+disbug version
 ```
-
-### Direct download
-
-Grab a binary for your OS/arch from [Releases](https://github.com/disbug-io/disbug-cli/releases) and put it on your PATH.
 
 ## Quickstart
 
@@ -30,13 +30,14 @@ disbug login                 # opens a browser; saves token to <UserConfigDir>/d
 disbug whoami                # confirms identity + capabilities
 disbug sessions --status open
 disbug session https://app.disbug.io/acme/projects/2/sessions/5/
+disbug resolve https://app.disbug.io/acme/projects/2/sessions/5/ --summary "Fixed checkout and ran tests."
 disbug pin 'https://app.disbug.io/acme/projects/2/sessions/5/?pin=1' --fields console,network
 disbug inspect ./disbug-report-example.json
 ```
 
-### Inspect a downloaded local report
+### Inspect a downloaded local session
 
-The Chrome extension can download a self-contained local report JSON when a user does not want to save a session to cloud. Inspect it without dumping screenshots or replay bytes into the terminal:
+The Chrome extension can download a self-contained local session JSON when a user does not want to save a session to the cloud. The backward-compatible filename still starts with `disbug-report-`. Inspect it without dumping screenshots or replay bytes into the terminal:
 
 ```bash
 disbug inspect ./disbug-report-example.json
@@ -48,9 +49,9 @@ disbug inspect ./disbug-report-example.json --pin 2 --fields screenshot,replay
 
 ### Use as an MCP server
 
-Disbug exposes read-only MCP tools for cloud reports: `whoami`, `list_sessions`, `get_session`, `get_pin`, `get_pins`, `search_sessions`, and `search_pins`.
+Disbug exposes MCP tools for cloud sessions: `whoami`, `list_sessions`, `get_session`, `get_pin`, `get_pins`, `search_sessions`, `search_pins`, and `resolve_session`. Only `resolve_session` writes; it requires a fix-and-verification summary.
 
-For downloaded local report JSON files, use `inspect_local_report` with a filesystem path. It returns the same lightweight summary as `disbug inspect`, and can inspect a single pin with selected fields without needing native host setup or a cloud upload.
+For downloaded local session JSON files, use the backward-compatible `inspect_local_report` tool with a filesystem path. It returns the same lightweight summary as `disbug inspect`, and can inspect a single pin with selected fields without needing native host setup or a cloud upload.
 
 Agent setup recipes:
 

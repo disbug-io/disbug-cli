@@ -16,9 +16,9 @@ import (
 
 // GetPinsItem is one pin fetch request in the get_pins MCP tool input.
 type GetPinsItem struct {
-	Target string   `json:"target,omitempty" jsonschema:"Disbug report URL with ?pin=<number>"`
-	URL    string   `json:"url,omitempty" jsonschema:"Disbug report URL with ?pin=<number>"`
-	Pin    string   `json:"pin,omitempty" jsonschema:"Disbug report URL with ?pin=<number>"`
+	Target string   `json:"target,omitempty" jsonschema:"Disbug session URL with ?pin=<number>"`
+	URL    string   `json:"url,omitempty" jsonschema:"Disbug session URL with ?pin=<number>"`
+	Pin    string   `json:"pin,omitempty" jsonschema:"Disbug session URL with ?pin=<number>"`
 	Fields []string `json:"fields,omitempty" jsonschema:"fields for this pin; defaults to default_fields"`
 }
 
@@ -32,7 +32,7 @@ type GetPinsInput struct {
 func registerGetPins(srv *sdkmcp.Server, deps *Deps) {
 	sdkmcp.AddTool[GetPinsInput, Result](srv, &sdkmcp.Tool{
 		Name: "get_pins",
-		Description: "Bulk fetch Disbug pins by report URLs. Each pin may select its own fields; " +
+		Description: "Bulk fetch Disbug pins by session URLs. Each pin may select its own fields; " +
 			"items without fields use default_fields or all fields. Partial failures are returned in errors and " +
 			"are not tool errors unless every item fails.",
 	}, func(

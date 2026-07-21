@@ -27,12 +27,13 @@ type CLI struct {
 	Version kong.VersionFlag `name:"version" help:"Show version."`
 
 	Sessions SessionsCmd `cmd:"" name:"sessions" help:"List sessions."`
-	Session  SessionCmd  `cmd:"" name:"session" help:"Show a session by report URL."`
-	Pin      PinCmd      `cmd:"" name:"pin" help:"Show a pin by report URL."`
-	Pins     PinsCmd     `cmd:"" name:"pins" help:"Fetch pins by report URL."`
+	Session  SessionCmd  `cmd:"" name:"session" help:"Show a session by session URL."`
+	Resolve  ResolveCmd  `cmd:"" name:"resolve" help:"Resolve a session with a fix summary."`
+	Pin      PinCmd      `cmd:"" name:"pin" help:"Show a pin by session URL."`
+	Pins     PinsCmd     `cmd:"" name:"pins" help:"Fetch pins by session URL."`
 	Search   SearchCmd   `cmd:"" name:"search" help:"Search Disbug data."`
-	Watch    WatchCmd    `cmd:"" name:"watch" help:"Stream new sessions as events."`
-	Inspect  InspectCmd  `cmd:"" name:"inspect" help:"Inspect a downloaded local report JSON file."`
+	Watch    WatchCmd    `cmd:"" name:"watch" help:"Print new session notifications."`
+	Inspect  InspectCmd  `cmd:"" name:"inspect" help:"Inspect a downloaded local session JSON file."`
 
 	Login  LoginCmd  `cmd:"" name:"login" help:"Log in to Disbug."`
 	Logout LogoutCmd `cmd:"" name:"logout" help:"Log out of Disbug."`

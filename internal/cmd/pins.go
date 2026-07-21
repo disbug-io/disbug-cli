@@ -11,9 +11,9 @@ import (
 	"github.com/disbug-io/disbug-cli/internal/ref"
 )
 
-// PinsCmd fetches multiple pins by report URL and pin number.
+// PinsCmd fetches multiple pins by session URL and pin number.
 type PinsCmd struct {
-	Refs   []string `arg:"" name:"urls" help:"One or more Disbug report URLs with ?pin=<number>."`
+	Refs   []string `arg:"" name:"urls" help:"One or more Disbug session URLs with ?pin=<number>."`
 	Fields string   `help:"Default fields when a URL omits the fields query parameter." default:"all"`
 }
 

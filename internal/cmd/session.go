@@ -8,9 +8,9 @@ import (
 	"github.com/disbug-io/disbug-cli/internal/ref"
 )
 
-// SessionCmd shows a single session by report URL.
+// SessionCmd shows a single session by session URL.
 type SessionCmd struct {
-	Ref string `arg:"" name:"url" help:"Disbug report URL (e.g. https://app.disbug.io/team/projects/1/sessions/2/)"`
+	Ref string `arg:"" name:"url" help:"Disbug session URL (e.g. https://app.disbug.io/team/projects/1/sessions/2/)"`
 }
 
 // Run fetches a session detail response and writes it as JSON.
