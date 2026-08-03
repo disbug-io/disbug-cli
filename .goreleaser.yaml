@@ -42,6 +42,11 @@ brews:
     license: MIT
     install: |
       bin.install "disbug"
+    caveats: |
+      Installation complete. Now use Disbug login to log in.
+
+      Run:
+        disbug login
     test: |
       system "#{bin}/disbug --version"
 
@@ -53,3 +58,5 @@ scoops:
     homepage: https://disbug.io
     description: Disbug CLI and MCP server for AI coding agents
     license: MIT
+    post_install:
+      - 'Write-Host "Installation complete. Now use Disbug login to log in: disbug login"'

@@ -77,6 +77,8 @@ func TestLoginBrowserFlowPersistsTokenProfileMetadata(t *testing.T) {
 	}
 
 	assert.Contains(t, stdout.String(), "Logged in")
+	assert.Contains(t, stdout.String(), "Next, connect Disbug to your AI agent:")
+	assert.Contains(t, stdout.String(), "disbug configure")
 	assert.Contains(t, stderr.String(), "Opening")
 
 	profile := readLoginProfile(t, "default")

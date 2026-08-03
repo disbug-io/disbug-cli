@@ -85,11 +85,19 @@ func (c *LoginCmd) Run(ctx context.Context, b bindings) error {
 
 	_, err = fmt.Fprintf(
 		b.Stdout,
-		"Logged in as %s for team %s.\n",
+		"Logged in as %s for team %s.\n\nNext, connect Disbug to your AI agent:\n  %s\n",
 		emptyDefault(me.AgentName, name),
 		me.Team,
+		configureCommand(profileName),
 	)
 	return err
+}
+
+func configureCommand(profile string) string {
+	if profile == "" || profile == defaultProfile {
+		return "disbug configure"
+	}
+	return fmt.Sprintf("disbug --profile %s configure", profile)
 }
 
 func (c *LoginCmd) validateFlags() error {

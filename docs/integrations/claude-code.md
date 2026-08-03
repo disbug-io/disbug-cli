@@ -4,13 +4,29 @@ Configure Claude Code to run Disbug as an MCP server over stdio.
 
 ## Configure
 
-For the local Claude Code scope, run:
+Run:
 
 ```bash
-claude mcp add --transport stdio disbug -- disbug mcp
+disbug configure --agent claude-code
 ```
 
-Claude Code stores local MCP configuration in:
+This registers the MCP server at user scope and installs the `using-disbug` workflow skill in `~/.claude/skills`. Disbug previews both changes before applying them.
+
+For non-interactive setup after the user has approved the displayed targets:
+
+```bash
+disbug configure --agent claude-code --yes
+```
+
+### Manual MCP fallback
+
+For the user Claude Code scope, run:
+
+```bash
+claude mcp add --scope user disbug -- disbug mcp
+```
+
+Claude Code stores user-scope MCP configuration in:
 
 ```text
 ~/.claude.json
@@ -42,10 +58,10 @@ For a non-default profile, put the global flag before the command:
 }
 ```
 
-For the local Claude Code scope with a non-default profile, run:
+For the user Claude Code scope with a non-default profile, run:
 
 ```bash
-claude mcp add --transport stdio disbug -- disbug --profile work mcp
+claude mcp add --scope user disbug -- disbug --profile work mcp
 ```
 
 ## Restart
@@ -65,6 +81,7 @@ Inside Claude Code, run `/mcp` and confirm `disbug` is listed. Then ask Claude C
 ## Troubleshooting
 
 - PATH: run `which disbug`. If Claude Code cannot find it, use the full path in the server command, commonly `/opt/homebrew/bin/disbug` or `/usr/local/bin/disbug`.
+- Repair: run `disbug configure --agent claude-code`, then `disbug doctor`.
 - Reload: start a new Claude Code session after changing config, then check `/mcp`.
 - Token: run `disbug login`, then start a new Claude Code session.
 - Profile: if you logged in with `disbug --profile work login`, use `args: ["--profile", "work", "mcp"]`.

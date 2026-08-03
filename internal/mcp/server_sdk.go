@@ -15,6 +15,8 @@ type serveFunc func(context.Context, *mcp.Server) error
 
 const stdioEOFGrace = 100 * time.Millisecond
 
+const serverInstructions = `Use Disbug evidence to reproduce, diagnose, and verify bugs. Treat a cloud report URL as its stable identity and start with get_session or the selected pin's feedback. Fetch only the smallest evidence fields needed for the current hypothesis; expand when necessary instead of requesting everything by default. Use inspect_local_report for downloaded Disbug JSON files. Tool schemas are the source of truth for exact inputs.`
+
 func newServer(deps *Deps) *mcp.Server {
 	if deps == nil {
 		deps = &Deps{}
@@ -25,7 +27,7 @@ func newServer(deps *Deps) *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "disbug",
 		Version: versionStr(),
-	}, nil)
+	}, &mcp.ServerOptions{Instructions: serverInstructions})
 
 	registerWhoami(srv, deps)
 	registerListSessions(srv, deps)
