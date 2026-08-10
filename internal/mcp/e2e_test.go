@@ -46,6 +46,9 @@ func TestMCPSubprocessInitialize(t *testing.T) {
 	if !strings.Contains(string(resp.Result), `"protocolVersion"`) {
 		t.Fatalf("initialize result = %s, want protocolVersion", resp.Result)
 	}
+	if !strings.Contains(string(resp.Result), `"instructions"`) || !strings.Contains(string(resp.Result), "smallest evidence fields") {
+		t.Fatalf("initialize result = %s, want workflow instructions", resp.Result)
+	}
 }
 
 func TestMCPSubprocessToolsListIncludesAllTools(t *testing.T) {

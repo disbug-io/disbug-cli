@@ -66,7 +66,38 @@ func TestExecuteMCPHelpIncludesCommand(t *testing.T) {
 	err := Execute(context.Background(), []string{"mcp", "--help"}, nil, &stdout, &stderr)
 
 	require.NoError(t, err)
-	assert.Contains(t, stdout.String(), "Run MCP integration commands.")
+	assert.Contains(t, stdout.String(), "Run the Disbug MCP server over stdio.")
+	assert.Empty(t, stderr.String())
+}
+
+func TestUpdateCheckDisabledSkipsProtocolAndOptOut(t *testing.T) {
+	for _, command := range []string{"mcp", "completion", "version"} {
+		if !updateCheckDisabled(command) {
+			t.Fatalf("updateCheckDisabled(%q) = false, want true", command)
+		}
+	}
+	for _, command := range []string{"session", "sessions", "doctor", "configure", "login", ""} {
+		if updateCheckDisabled(command) {
+			t.Fatalf("updateCheckDisabled(%q) = true, want false", command)
+		}
+	}
+
+	t.Setenv("DISBUG_NO_UPDATE_CHECK", "1")
+	if !updateCheckDisabled("doctor") {
+		t.Fatal("updateCheckDisabled with opt-out env = false, want true")
+	}
+}
+
+func TestExecuteRootHelpExplainsGettingStartedAndConfigure(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := Execute(context.Background(), []string{"--help"}, nil, &stdout, &stderr)
+
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), "Getting started: disbug login, then disbug configure, then disbug doctor.")
+	assert.Contains(t, stdout.String(), "configure")
+	assert.Contains(t, stdout.String(), "Run disbug <command> --help")
 	assert.Empty(t, stderr.String())
 }
 

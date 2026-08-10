@@ -2,7 +2,7 @@
 
 Disbug CLI and MCP server for AI coding agents.
 
-A single Go binary that reads bug-report sessions from your team's Disbug instance, plus downloaded local report JSON files. Use it from your terminal, or hook it into Claude Desktop / Claude Code / Codex / OpenClaw / Hermes / Cursor as an MCP server.
+A single Go binary that reads bug-report sessions from your team's Disbug instance, plus downloaded local report JSON files. Use the CLI from shell-capable agents, or connect its MCP server to an MCP-native agent.
 
 ## Install
 
@@ -26,13 +26,18 @@ Grab a binary for your OS/arch from [Releases](https://github.com/disbug-io/disb
 ## Quickstart
 
 ```bash
-disbug login                 # opens a browser; saves token to <UserConfigDir>/disbug/default.json
-disbug whoami                # confirms identity + capabilities
+disbug login                 # authenticate in the browser
+disbug configure             # connect detected agents and install the workflow skill
+disbug doctor                # verify login, backend, MCP, and skill setup
 disbug sessions --status open
 disbug session https://app.disbug.io/acme/projects/2/sessions/5/
 disbug pin 'https://app.disbug.io/acme/projects/2/sessions/5/?pin=1' --fields console,network
 disbug inspect ./disbug-report-example.json
 ```
+
+`disbug configure` currently supports Codex, Claude Code, and Cursor. It shows the files it will change and asks for confirmation. For non-interactive setup, select an agent explicitly, for example `disbug configure --agent codex --yes`.
+
+The installed `using-disbug` skill teaches investigation workflow and capability selection. Command syntax remains in `disbug --help` and `disbug <command> --help`; MCP tool syntax remains in each tool's schema.
 
 ### Inspect a downloaded local report
 
@@ -52,7 +57,7 @@ Disbug exposes read-only MCP tools for cloud reports: `whoami`, `list_sessions`,
 
 For downloaded local report JSON files, use `inspect_local_report` with a filesystem path. It returns the same lightweight summary as `disbug inspect`, and can inspect a single pin with selected fields without needing native host setup or a cloud upload.
 
-Agent setup recipes:
+Run `disbug configure` for Codex, Claude Code, or Cursor. Manual setup recipes and unsupported-client fallbacks are also available:
 
 - [Claude Desktop](docs/integrations/claude-desktop.md)
 - [Claude Code](docs/integrations/claude-code.md)
@@ -65,10 +70,12 @@ Agent setup recipes:
 
 ```bash
 disbug --profile work login
+disbug --profile work configure
 disbug --profile personal login
+disbug --profile personal configure
 ```
 
-In the agent config, add the binary twice with `args: ["--profile", "work", "mcp"]` etc.
+Each configured profile points the selected agent at `disbug --profile <name> mcp`.
 
 ## Exit codes
 
