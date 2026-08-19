@@ -53,7 +53,7 @@ func TestAuthTransport_InjectsHeaders(t *testing.T) {
 	}
 }
 
-func TestAuthTransport_PreservesExistingUA(t *testing.T) {
+func TestAuthTransport_PreservesExistingHeaders(t *testing.T) {
 	captured := make(chan http.Header, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		captured <- r.Header.Clone()
@@ -73,6 +73,7 @@ func TestAuthTransport_PreservesExistingUA(t *testing.T) {
 		t.Fatalf("new request: %v", err)
 	}
 	req.Header.Set("User-Agent", "custom")
+	req.Header.Set("Accept", "*/*")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -84,14 +85,17 @@ func TestAuthTransport_PreservesExistingUA(t *testing.T) {
 	if got, want := headers.Get("User-Agent"), "custom"; got != want {
 		t.Fatalf("User-Agent = %q, want %q", got, want)
 	}
+	if got, want := headers.Get("Accept"), "*/*"; got != want {
+		t.Fatalf("Accept = %q, want %q", got, want)
+	}
 	if got, want := req.Header.Get("User-Agent"), "custom"; got != want {
 		t.Fatalf("original request User-Agent = %q, want %q", got, want)
 	}
 	if got := req.Header.Get("Authorization"); got != "" {
 		t.Fatalf("original request Authorization = %q, want empty", got)
 	}
-	if got := req.Header.Get("Accept"); got != "" {
-		t.Fatalf("original request Accept = %q, want empty", got)
+	if got, want := req.Header.Get("Accept"), "*/*"; got != want {
+		t.Fatalf("original request Accept = %q, want %q", got, want)
 	}
 }
 

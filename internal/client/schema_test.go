@@ -35,6 +35,9 @@ func TestBackendOpenAPISchemaContract(t *testing.T) {
 		"/api/teams/{team_slug}/projects/{project_id}/sessions/{session_number}/pins/by-number/{pin_number}/": {
 			"GET": "GetPinByNumber",
 		},
+		"/api/teams/{team_slug}/projects/{project_id}/sessions/{session_number}/pins/by-number/{pin_number}/attachments/{attachment_id}/download/": {
+			"GET": "DownloadAttachment",
+		},
 		"/api/search/": {
 			"GET": "Search",
 		},
@@ -57,6 +60,7 @@ func TestBackendOpenAPISchemaContract(t *testing.T) {
 
 	requiredSchemas := []string{
 		"Asset",
+		"Attachment",
 		"ConsoleLogItem",
 		"ErrorEnvelope",
 		"ListSessionsResponse",
@@ -69,6 +73,7 @@ func TestBackendOpenAPISchemaContract(t *testing.T) {
 		"SearchPinsResponse",
 		"SearchSessionsResponse",
 		"SessionDetail",
+		"SessionAttachment",
 		"SessionSummary",
 		"UserEventItem",
 	}
@@ -120,7 +125,19 @@ func TestBackendOpenAPISchemaContract(t *testing.T) {
 	assertSchemaType(t, doc.Components.Schemas["PinLite"].Value.Properties["number"].Value, "integer")
 	assertPropertyNullable(t, doc.Components.Schemas["SessionSummary"].Value, "project")
 	assertPropertyNullable(t, doc.Components.Schemas["SessionSummary"].Value, "reporter")
-	assertPropertyAbsent(t, doc.Components.Schemas["SessionSummary"].Value, "title")
+	assertPropertyPresent(t, doc.Components.Schemas["SessionSummary"].Value, "title")
+	assertPropertyPresent(t, doc.Components.Schemas["SessionSummary"].Value, "attachments")
+	assertPropertyPresent(t, doc.Components.Schemas["SessionDetail"].Value, "title")
+	assertPropertyPresent(t, doc.Components.Schemas["PinLite"].Value, "attachments")
+	assertPropertyPresent(t, doc.Components.Schemas["Attachment"].Value, "id")
+	assertPropertyPresent(t, doc.Components.Schemas["Attachment"].Value, "filename")
+	assertPropertyPresent(t, doc.Components.Schemas["Attachment"].Value, "content_type")
+	assertPropertyPresent(t, doc.Components.Schemas["Attachment"].Value, "size_bytes")
+	assertSchemaType(t, doc.Components.Schemas["Attachment"].Value.Properties["id"].Value, "integer")
+	assertSchemaType(t, doc.Components.Schemas["Attachment"].Value.Properties["size_bytes"].Value, "integer")
+	sessionAttachmentExtension := doc.Components.Schemas["SessionAttachment"].Value.AllOf[1].Value
+	assertPropertyPresent(t, sessionAttachmentExtension, "pin_number")
+	assertSchemaType(t, sessionAttachmentExtension.Properties["pin_number"].Value, "integer")
 	assertPropertyAbsent(t, doc.Components.Schemas["SessionSummary"].Value, "created_at")
 	assertPropertyAbsent(t, doc.Components.Schemas["ErrorEnvelope"].Value, "error")
 	assertPropertyPresent(t, doc.Components.Schemas["ErrorEnvelope"].Value, "code")

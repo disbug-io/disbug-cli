@@ -41,6 +41,7 @@ func TestListSessions(t *testing.T) {
 		_, _ = io.WriteString(w, `{
 			"results":[{
 				"id":123,
+				"title":"Checkout fails",
 				"team_slug":"acme",
 				"project":{"id":42,"slug":"42","name":"Website"},
 				"project_session_number":5,
@@ -51,7 +52,14 @@ func TestListSessions(t *testing.T) {
 				"first_pin_feedback":"broken button",
 				"reporter":{"email":"r@example.test","display_name":"Reporter"},
 				"updated_at":"2026-05-01T12:00:00Z",
-				"free_tier_locked":true
+				"free_tier_locked":true,
+				"attachments":[{
+					"id":901,
+					"filename":"diagnostic.txt",
+					"content_type":"text/plain",
+					"size_bytes":128,
+					"pin_number":2
+				}]
 			}],
 			"next_cursor":"next-2",
 			"count":3,
@@ -83,6 +91,17 @@ func TestListSessions(t *testing.T) {
 	}
 	if got, want := resp.Results[0].FirstPinFeedback, "broken button"; got != want {
 		t.Fatalf("FirstPinFeedback = %q, want %q", got, want)
+	}
+	if got, want := resp.Results[0].Title, "Checkout fails"; got != want {
+		t.Fatalf("Title = %q, want %q", got, want)
+	}
+	if got, want := len(resp.Results[0].Attachments), 1; got != want {
+		t.Fatalf("len(Attachments) = %d, want %d", got, want)
+	}
+	attachment := resp.Results[0].Attachments[0]
+	if attachment.ID != 901 || attachment.Filename != "diagnostic.txt" ||
+		attachment.ContentType != "text/plain" || attachment.SizeBytes != 128 || attachment.PinNumber != 2 {
+		t.Fatalf("Attachments[0] = %#v, want complete attachment metadata", attachment)
 	}
 	if resp.NextCursor == nil || *resp.NextCursor != "next-2" {
 		t.Fatalf("NextCursor = %v, want next-2", resp.NextCursor)
@@ -312,6 +331,7 @@ func TestGetSession(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{
 			"id":123,
+			"title":"Checkout fails",
 			"team_slug":"acme",
 			"project_session_number":5,
 			"report_url":"https://app.disbug.test/acme/projects/42/sessions/5/",
@@ -327,7 +347,13 @@ func TestGetSession(t *testing.T) {
 				"url":"https://example.test/page#pin",
 				"selector":"#submit",
 				"element_info":{"tag":"button"},
-				"metadata":{"viewport":"mobile"}
+				"metadata":{"viewport":"mobile"},
+				"attachments":[{
+					"id":902,
+					"filename":"request.json",
+					"content_type":"application/json",
+					"size_bytes":256
+				}]
 			}]
 		}`)
 	}))
@@ -341,6 +367,9 @@ func TestGetSession(t *testing.T) {
 	}
 	if session.Project == nil {
 		t.Fatal("Project = nil, want project")
+	}
+	if got, want := session.Title, "Checkout fails"; got != want {
+		t.Fatalf("Title = %q, want %q", got, want)
 	}
 	if got, want := session.Project.Name, "Website"; got != want {
 		t.Fatalf("Project.Name = %q, want %q", got, want)
@@ -359,6 +388,14 @@ func TestGetSession(t *testing.T) {
 	}
 	if got, want := session.Pins[0].ElementInfo["tag"], "button"; got != want {
 		t.Fatalf("ElementInfo[tag] = %v, want %q", got, want)
+	}
+	if got, want := len(session.Pins[0].Attachments), 1; got != want {
+		t.Fatalf("len(Pins[0].Attachments) = %d, want %d", got, want)
+	}
+	attachment := session.Pins[0].Attachments[0]
+	if attachment.ID != 902 || attachment.Filename != "request.json" ||
+		attachment.ContentType != "application/json" || attachment.SizeBytes != 256 {
+		t.Fatalf("Pins[0].Attachments[0] = %#v, want complete attachment metadata", attachment)
 	}
 }
 

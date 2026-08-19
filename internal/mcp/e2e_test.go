@@ -25,6 +25,7 @@ var e2eTools = []string{
 	"get_session",
 	"get_pin",
 	"get_pins",
+	"download_attachment",
 	"inspect_local_report",
 	"search_sessions",
 	"search_pins",

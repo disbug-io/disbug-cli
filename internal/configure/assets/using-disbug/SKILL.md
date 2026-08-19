@@ -20,6 +20,7 @@ Do not assume that having the `disbug mcp` command means the current agent is co
 1. Treat the report URL as the stable identity for a cloud report. Preserve any `?pin=` selection.
 2. Start with the session summary or the selected pin's feedback. Establish what the user expected, what happened, the page, and the relevant time window.
 3. Fetch only the evidence needed for the current hypothesis. Useful evidence can include console output, network activity, user actions, page state, screenshots, storage, and system context.
+   Session and pin output includes attachment filenames and IDs. Download relevant attachments so their contents reach the agent.
 4. Correlate evidence before changing code. Prefer timestamps, request IDs, routes, and visible state over guesses.
 5. Implement the smallest well-supported fix, then run the repository's relevant checks.
 6. Verify against the original report. If new reports are arriving during a live debugging session, use Disbug's watch capability to continue from fresh evidence.

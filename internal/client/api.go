@@ -26,18 +26,20 @@ type Reporter struct {
 
 // SessionSummary is a compact session record returned by ListSessions.
 type SessionSummary struct {
-	TeamSlug             string    `json:"team_slug"`
-	Project              *Project  `json:"project"`
-	ProjectSessionNumber int64     `json:"project_session_number"`
-	ReportURL            string    `json:"report_url"`
-	URL                  string    `json:"url"`
-	Status               string    `json:"status"`
-	PinCount             int       `json:"pin_count"`
-	FirstPinFeedback     string    `json:"first_pin_feedback"`
-	Reporter             *Reporter `json:"reporter"`
-	CreatedAt            string    `json:"created_at"`
-	UpdatedAt            string    `json:"updated_at"`
-	FreeTierLocked       bool      `json:"free_tier_locked"`
+	Title                string              `json:"title"`
+	TeamSlug             string              `json:"team_slug"`
+	Project              *Project            `json:"project"`
+	ProjectSessionNumber int64               `json:"project_session_number"`
+	ReportURL            string              `json:"report_url"`
+	URL                  string              `json:"url"`
+	Status               string              `json:"status"`
+	PinCount             int                 `json:"pin_count"`
+	FirstPinFeedback     string              `json:"first_pin_feedback"`
+	Reporter             *Reporter           `json:"reporter"`
+	CreatedAt            string              `json:"created_at"`
+	UpdatedAt            string              `json:"updated_at"`
+	FreeTierLocked       bool                `json:"free_tier_locked"`
+	Attachments          []SessionAttachment `json:"attachments"`
 }
 
 // ListSessionsParams holds optional filters for ListSessions.
@@ -183,10 +185,26 @@ type PinLite struct {
 	Selector    *string        `json:"selector"`
 	ElementInfo map[string]any `json:"element_info"`
 	Metadata    map[string]any `json:"metadata"`
+	Attachments []Attachment   `json:"attachments"`
+}
+
+// Attachment is metadata for a file attached to a pin.
+type Attachment struct {
+	ID          int64  `json:"id"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	SizeBytes   int64  `json:"size_bytes"`
+}
+
+// SessionAttachment identifies an attachment and its owning pin in a session listing.
+type SessionAttachment struct {
+	Attachment
+	PinNumber int64 `json:"pin_number"`
 }
 
 // SessionDetail is a full session record with its pins.
 type SessionDetail struct {
+	Title                string    `json:"title"`
 	TeamSlug             string    `json:"team_slug"`
 	Project              *Project  `json:"project"`
 	ProjectSessionNumber int64     `json:"project_session_number"`

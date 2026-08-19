@@ -190,6 +190,41 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/teams/{team_slug}/projects/{project_id}/sessions/{session_number}/pins/by-number/{pin_number}/attachments/{attachment_id}/download/:
+    get:
+      operationId: DownloadAttachment
+      summary: Download an attachment belonging to a pin.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TeamSlug"
+        - $ref: "#/components/parameters/ProjectID"
+        - $ref: "#/components/parameters/SessionNumber"
+        - $ref: "#/components/parameters/PinNumber"
+        - $ref: "#/components/parameters/AttachmentID"
+      responses:
+        "200":
+          description: Attachment bytes.
+          headers:
+            Content-Disposition:
+              description: Attachment filename.
+              schema:
+                type: string
+            Content-Type:
+              description: Attachment MIME type.
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 components:
   securitySchemes:
     bearerAuth:
@@ -225,6 +260,14 @@ components:
       in: path
       required: true
       description: Pin number within the session.
+      schema:
+        type: integer
+        minimum: 1
+    AttachmentID:
+      name: attachment_id
+      in: path
+      required: true
+      description: Attachment identifier shown in session or pin output.
       schema:
         type: integer
         minimum: 1
@@ -314,6 +357,7 @@ components:
               - pin_field_selection
               - scoped_session_lookup
               - scoped_pin_lookup
+              - attachment_download
     Project:
       type: object
       required:
@@ -358,6 +402,7 @@ components:
     SessionSummary:
       type: object
       required:
+        - title
         - team_slug
         - project
         - project_session_number
@@ -369,7 +414,10 @@ components:
         - reporter
         - updated_at
         - free_tier_locked
+        - attachments
       properties:
+        title:
+          type: string
         team_slug:
           type: string
         project:
@@ -406,9 +454,14 @@ components:
           format: date-time
         free_tier_locked:
           type: boolean
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionAttachment"
     SessionDetail:
       type: object
       required:
+        - title
         - team_slug
         - status
         - project
@@ -419,6 +472,8 @@ components:
         - updated_at
         - pins
       properties:
+        title:
+          type: string
         team_slug:
           type: string
         status:
@@ -460,6 +515,7 @@ components:
         - selector
         - element_info
         - metadata
+        - attachments
       properties:
         number:
           type: integer
@@ -479,6 +535,38 @@ components:
         metadata:
           type: object
           additionalProperties: true
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Attachment"
+    Attachment:
+      type: object
+      required:
+        - id
+        - filename
+        - content_type
+        - size_bytes
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        filename:
+          type: string
+        content_type:
+          type: string
+        size_bytes:
+          type: integer
+          minimum: 0
+    SessionAttachment:
+      allOf:
+        - $ref: "#/components/schemas/Attachment"
+        - type: object
+          required:
+            - pin_number
+          properties:
+            pin_number:
+              type: integer
+              minimum: 1
     PinFull:
       allOf:
         - $ref: "#/components/schemas/PinLite"

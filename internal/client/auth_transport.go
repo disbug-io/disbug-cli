@@ -21,7 +21,9 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	cloned.Header.Set("Authorization", "Bearer "+t.token)
-	cloned.Header.Set("Accept", "application/json")
+	if cloned.Header.Get("Accept") == "" {
+		cloned.Header.Set("Accept", "application/json")
+	}
 	if cloned.Header.Get("User-Agent") == "" {
 		cloned.Header.Set("User-Agent", t.userAgent)
 	}

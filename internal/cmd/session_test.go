@@ -108,7 +108,7 @@ func TestSessionPrettyOutput(t *testing.T) {
 	if got := stderr; got != "" {
 		t.Fatalf("stderr = %q, want empty", got)
 	}
-	if got := stdout; !bytes.Contains([]byte(got), []byte("{\n  \"team_slug\":")) {
+	if got := stdout; !bytes.Contains([]byte(got), []byte("{\n  \"title\":")) {
 		t.Fatalf("stdout = %q, want indented JSON", got)
 	}
 	if got := stdout; bytes.Contains([]byte(got), []byte(`"id": 7392`)) {
