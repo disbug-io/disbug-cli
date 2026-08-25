@@ -19,10 +19,13 @@ Do not assume that having the `disbug mcp` command means the current agent is co
 
 1. Treat the report URL as the stable identity for a cloud report. Preserve any `?pin=` selection.
 2. Start with the session summary or the selected pin's feedback. Establish what the user expected, what happened, the page, and the relevant time window.
-3. Fetch only the evidence needed for the current hypothesis. Useful evidence can include console output, network activity, user actions, page state, screenshots, storage, and system context.
+3. Fetch only the evidence needed for the current hypothesis. Useful evidence can include console output, network activity, user actions, page state, screenshots, storage, system context, and files attached to a pin. Session and pin output includes attachment filenames and IDs; download a relevant attachment so its contents reach the agent.
 4. Correlate evidence before changing code. Prefer timestamps, request IDs, routes, and visible state over guesses.
 5. Implement the smallest well-supported fix, then run the repository's relevant checks.
 6. Verify against the original report. If new reports are arriving during a live debugging session, use Disbug's watch capability to continue from fresh evidence.
+7. When a user-requested fix is verified, update that pin to `resolved` and add a concise note describing the verified change. Use `dismissed` only when you have a concrete reason, and include it in the note. Leave the status unchanged when the fix is incomplete, uncertain, or unverified.
+
+Fetching, reading, or diagnosing a report must never change its status. A status update is an explicit final workflow action performed through the Disbug CLI or MCP tool; it is not background automation. Keep pin notes attached to the pin they describe. Do not update the session status automatically, including when every pin is resolved or dismissed. Use the session status command or MCP tool only when the user explicitly requests a session-status change.
 
 For a downloaded report JSON file, inspect the local file with the CLI or the MCP local-report capability. Local JSON inspection does not require cloud authentication.
 

@@ -56,7 +56,7 @@ func (m *Manager) installSkill(target string) error {
 	sum := sha256.Sum256(data)
 	metadata := map[string]any{
 		"managed_by": "disbug",
-		"version":    1,
+		"version":    2,
 		"sha256":     hex.EncodeToString(sum[:]),
 	}
 	marker, err := json.MarshalIndent(metadata, "", "  ")

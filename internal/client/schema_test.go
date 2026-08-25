@@ -32,8 +32,17 @@ func TestBackendOpenAPISchemaContract(t *testing.T) {
 		"/api/teams/{team_slug}/projects/{project_id}/sessions/{session_number}/": {
 			"GET": "GetSession",
 		},
+		"/api/teams/{team_slug}/projects/{project_id}/sessions/{session_number}/status/": {
+			"POST": "SetSessionStatus",
+		},
 		"/api/teams/{team_slug}/projects/{project_id}/sessions/{session_number}/pins/by-number/{pin_number}/": {
 			"GET": "GetPinByNumber",
+		},
+		"/api/teams/{team_slug}/projects/{project_id}/sessions/{session_number}/pins/by-number/{pin_number}/attachments/{attachment_id}/download/": {
+			"GET": "DownloadAttachment",
+		},
+		"/api/teams/{team_slug}/projects/{project_id}/sessions/{session_number}/pins/by-number/{pin_number}/status/": {
+			"POST": "SetPinStatus",
 		},
 		"/api/search/": {
 			"GET": "Search",
@@ -57,6 +66,8 @@ func TestBackendOpenAPISchemaContract(t *testing.T) {
 
 	requiredSchemas := []string{
 		"Asset",
+		"Attachment",
+		"AgentActivity",
 		"ConsoleLogItem",
 		"ErrorEnvelope",
 		"ListSessionsResponse",
@@ -64,12 +75,16 @@ func TestBackendOpenAPISchemaContract(t *testing.T) {
 		"NetworkLogItem",
 		"PinFull",
 		"PinLite",
+		"PinStatusResponse",
 		"Project",
 		"Reporter",
 		"SearchPinsResponse",
 		"SearchSessionsResponse",
 		"SessionDetail",
+		"SessionAttachment",
+		"SessionStatusResponse",
 		"SessionSummary",
+		"StatusUpdate",
 		"UserEventItem",
 	}
 	for _, name := range requiredSchemas {
@@ -118,9 +133,14 @@ func TestBackendOpenAPISchemaContract(t *testing.T) {
 	assertSchemaType(t, doc.Components.Schemas["SessionSummary"].Value.Properties["project_session_number"].Value, "integer")
 	assertSchemaType(t, doc.Components.Schemas["SessionSummary"].Value.Properties["report_url"].Value, "string")
 	assertSchemaType(t, doc.Components.Schemas["PinLite"].Value.Properties["number"].Value, "integer")
+	assertPropertyPresent(t, doc.Components.Schemas["PinLite"].Value, "status")
+	assertPropertyPresent(t, doc.Components.Schemas["SessionDetail"].Value, "agent_log")
 	assertPropertyNullable(t, doc.Components.Schemas["SessionSummary"].Value, "project")
 	assertPropertyNullable(t, doc.Components.Schemas["SessionSummary"].Value, "reporter")
-	assertPropertyAbsent(t, doc.Components.Schemas["SessionSummary"].Value, "title")
+	assertPropertyPresent(t, doc.Components.Schemas["SessionSummary"].Value, "title")
+	assertPropertyPresent(t, doc.Components.Schemas["SessionSummary"].Value, "attachments")
+	assertPropertyPresent(t, doc.Components.Schemas["SessionDetail"].Value, "title")
+	assertPropertyPresent(t, doc.Components.Schemas["PinLite"].Value, "attachments")
 	assertPropertyAbsent(t, doc.Components.Schemas["SessionSummary"].Value, "created_at")
 	assertPropertyAbsent(t, doc.Components.Schemas["ErrorEnvelope"].Value, "error")
 	assertPropertyPresent(t, doc.Components.Schemas["ErrorEnvelope"].Value, "code")

@@ -18,6 +18,7 @@ func TestGetSession_InProcess(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{
 			"id":7392,
+			"title":"Checkout failure",
 			"team_slug":"abb",
 			"project_session_number":5,
 			"status":"open",
@@ -26,7 +27,7 @@ func TestGetSession_InProcess(t *testing.T) {
 			"report_url":"https://staging.disbug.us/abb/projects/2/sessions/5/",
 			"url":"https://example.test",
 			"updated_at":"2026-05-01T00:00:00Z",
-			"pins":[{"id":44,"number":2,"feedback":"button missing","url":null,"selector":null,"element_info":{},"metadata":{}}]
+			"pins":[{"id":44,"number":2,"feedback":"button missing","url":null,"selector":null,"element_info":{},"metadata":{},"attachments":[{"id":9,"filename":"notes.md","content_type":"text/markdown","size_bytes":42}]}]
 		}`)
 	}))
 	t.Cleanup(backend.Close)
@@ -56,6 +57,9 @@ func TestGetSession_InProcess(t *testing.T) {
 	}
 	if !strings.Contains(text, "button missing") {
 		t.Fatalf("get_session content = %q, want feedback", text)
+	}
+	if !strings.Contains(text, "Checkout failure") || !strings.Contains(text, "notes.md") {
+		t.Fatalf("get_session content = %q, want edited title and attachment filename", text)
 	}
 
 	req := waitForRequest(t, requests, "/api/teams/abb/projects/2/sessions/5/")

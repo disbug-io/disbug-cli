@@ -150,6 +150,37 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/teams/{team_slug}/projects/{project_id}/sessions/{session_number}/status/:
+    post:
+      operationId: SetSessionStatus
+      summary: Update a session status and optionally add an agent note.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TeamSlug"
+        - $ref: "#/components/parameters/ProjectID"
+        - $ref: "#/components/parameters/SessionNumber"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatusUpdate"
+      responses:
+        "200":
+          description: Updated session status and activity log.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionStatusResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/teams/{team_slug}/projects/{project_id}/sessions/{session_number}/pins/by-number/{pin_number}/:
     get:
       operationId: GetPinByNumber
@@ -182,6 +213,68 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PinFull"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/teams/{team_slug}/projects/{project_id}/sessions/{session_number}/pins/by-number/{pin_number}/attachments/{attachment_id}/download/:
+    get:
+      operationId: DownloadAttachment
+      summary: Download a file attached to a pin.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TeamSlug"
+        - $ref: "#/components/parameters/ProjectID"
+        - $ref: "#/components/parameters/SessionNumber"
+        - $ref: "#/components/parameters/PinNumber"
+        - $ref: "#/components/parameters/AttachmentID"
+      responses:
+        "200":
+          description: Attachment bytes.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/teams/{team_slug}/projects/{project_id}/sessions/{session_number}/pins/by-number/{pin_number}/status/:
+    post:
+      operationId: SetPinStatus
+      summary: Update a pin status and optionally add an agent note.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TeamSlug"
+        - $ref: "#/components/parameters/ProjectID"
+        - $ref: "#/components/parameters/SessionNumber"
+        - $ref: "#/components/parameters/PinNumber"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatusUpdate"
+      responses:
+        "200":
+          description: Updated pin status and activity log.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PinStatusResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -225,6 +318,14 @@ components:
       in: path
       required: true
       description: Pin number within the session.
+      schema:
+        type: integer
+        minimum: 1
+    AttachmentID:
+      name: attachment_id
+      in: path
+      required: true
+      description: Attachment ID returned in session or pin output.
       schema:
         type: integer
         minimum: 1
@@ -314,6 +415,10 @@ components:
               - pin_field_selection
               - scoped_session_lookup
               - scoped_pin_lookup
+              - resolve_session
+              - status_updates
+              - agent_activity_log
+              - attachment_download
     Project:
       type: object
       required:
@@ -358,6 +463,7 @@ components:
     SessionSummary:
       type: object
       required:
+        - title
         - team_slug
         - project
         - project_session_number
@@ -369,7 +475,10 @@ components:
         - reporter
         - updated_at
         - free_tier_locked
+        - attachments
       properties:
+        title:
+          type: string
         team_slug:
           type: string
         project:
@@ -406,9 +515,14 @@ components:
           format: date-time
         free_tier_locked:
           type: boolean
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionAttachment"
     SessionDetail:
       type: object
       required:
+        - title
         - team_slug
         - status
         - project
@@ -418,7 +532,10 @@ components:
         - url
         - updated_at
         - pins
+        - agent_log
       properties:
+        title:
+          type: string
         team_slug:
           type: string
         status:
@@ -451,21 +568,65 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PinLite"
+        agent_log:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentActivity"
+    SessionStatusResponse:
+      type: object
+      required:
+        - team_slug
+        - project
+        - project_session_number
+        - report_url
+        - status
+        - agent_log
+      properties:
+        team_slug:
+          type: string
+        project:
+          allOf:
+            - $ref: "#/components/schemas/Project"
+          nullable: true
+        project_session_number:
+          type: integer
+          minimum: 1
+        report_url:
+          type: string
+          format: uri
+        status:
+          type: string
+          enum:
+            - open
+            - resolved
+            - dismissed
+        agent_log:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentActivity"
     PinLite:
       type: object
       required:
         - number
         - feedback
+        - status
         - url
         - selector
         - element_info
         - metadata
+        - attachments
       properties:
         number:
           type: integer
           minimum: 1
         feedback:
           type: string
+        status:
+          type: string
+          enum:
+            - open
+            - resolved
+            - dismissed
         url:
           type: string
           format: uri
@@ -479,6 +640,10 @@ components:
         metadata:
           type: object
           additionalProperties: true
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Attachment"
     PinFull:
       allOf:
         - $ref: "#/components/schemas/PinLite"
@@ -512,6 +677,76 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/UserEventItem"
+            agent_log:
+              type: array
+              items:
+                $ref: "#/components/schemas/AgentActivity"
+    PinStatusResponse:
+      type: object
+      required:
+        - number
+        - status
+        - agent_log
+      properties:
+        number:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum:
+            - open
+            - resolved
+            - dismissed
+        agent_log:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentActivity"
+    StatusUpdate:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - open
+            - resolved
+            - dismissed
+        note:
+          type: string
+          maxLength: 2000
+    AgentActivity:
+      type: object
+      required:
+        - id
+        - action
+        - agent_display
+        - field
+        - status
+        - note
+        - created_at
+      properties:
+        id:
+          type: integer
+        action:
+          type: string
+        agent_id:
+          type: integer
+          nullable: true
+        agent_display:
+          type: string
+        pin_number:
+          type: integer
+          nullable: true
+        field:
+          type: string
+        status:
+          type: string
+        note:
+          type: string
+        created_at:
+          type: string
+          format: date-time
     Asset:
       type: object
       required:
@@ -532,6 +767,34 @@ components:
           type: integer
           minimum: 0
           nullable: true
+    Attachment:
+      type: object
+      required:
+        - id
+        - filename
+        - content_type
+        - size_bytes
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        filename:
+          type: string
+        content_type:
+          type: string
+        size_bytes:
+          type: integer
+          minimum: 0
+    SessionAttachment:
+      allOf:
+        - $ref: "#/components/schemas/Attachment"
+        - type: object
+          required:
+            - pin_number
+          properties:
+            pin_number:
+              type: integer
+              minimum: 1
     ConsoleLogItem:
       type: object
       additionalProperties: true

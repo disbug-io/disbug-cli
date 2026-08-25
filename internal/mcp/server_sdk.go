@@ -15,7 +15,7 @@ type serveFunc func(context.Context, *mcp.Server) error
 
 const stdioEOFGrace = 100 * time.Millisecond
 
-const serverInstructions = `Use Disbug evidence to reproduce, diagnose, and verify bugs. Treat a cloud report URL as its stable identity and start with get_session or the selected pin's feedback. Fetch only the smallest evidence fields needed for the current hypothesis; expand when necessary instead of requesting everything by default. Use inspect_local_report for downloaded Disbug JSON files. Tool schemas are the source of truth for exact inputs.`
+const serverInstructions = `Use Disbug evidence to reproduce, diagnose, and verify bugs. Treat a cloud report URL as its stable identity and start with get_session or the selected pin's feedback. Attachment metadata includes stable IDs; call download_attachment when an attachment is relevant so the agent receives its actual content. Fetch only the smallest evidence fields needed for the current hypothesis; expand when necessary instead of requesting everything by default. Fetching is read-only: never change status merely because a report was read. After a user-requested fix has been implemented and verified, use the matching status tool to record the outcome and an optional concise note. Use inspect_local_report for downloaded Disbug JSON files. Tool schemas are the source of truth for exact inputs.`
 
 func newServer(deps *Deps) *mcp.Server {
 	if deps == nil {
@@ -34,9 +34,12 @@ func newServer(deps *Deps) *mcp.Server {
 	registerGetSession(srv, deps)
 	registerGetPin(srv, deps)
 	registerGetPins(srv, deps)
+	registerDownloadAttachment(srv, deps)
 	registerInspectLocalReport(srv, deps)
 	registerSearchSessions(srv, deps)
 	registerSearchPins(srv, deps)
+	registerSetSessionStatus(srv, deps)
+	registerSetPinStatus(srv, deps)
 
 	return srv
 }

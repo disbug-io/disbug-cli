@@ -25,12 +25,13 @@ const (
 
 // Client talks to the Disbug API.
 type Client struct {
-	client    *http.Client
-	apiURL    string
-	userAgent string
-	sem       chan struct{}
-	cache     meCache
-	clock     seams.Clock
+	client        *http.Client
+	noRetryClient *http.Client
+	apiURL        string
+	userAgent     string
+	sem           chan struct{}
+	cache         meCache
+	clock         seams.Clock
 }
 
 type meCache struct {
@@ -63,15 +64,19 @@ func New(apiURL, token, userAgent string, sleeper seams.Sleeper, doer seams.HTTP
 		clock = seams.DefaultClock()
 	}
 
-	transport := newRetryTransport(&authTransport{
+	authenticatedTransport := &authTransport{
 		base:      doerRoundTripper{doer: doer},
 		token:     token,
 		userAgent: userAgent,
-	}, sleeper)
+	}
 
 	return &Client{
 		client: &http.Client{
-			Transport: transport,
+			Transport: newRetryTransport(authenticatedTransport, sleeper),
+			Timeout:   defaultTimeout,
+		},
+		noRetryClient: &http.Client{
+			Transport: authenticatedTransport,
 			Timeout:   defaultTimeout,
 		},
 		apiURL:    normalizeAPIURL(apiURL),
@@ -172,6 +177,21 @@ func (c *Client) RequireCapability(ctx context.Context, want string) error {
 }
 
 func (c *Client) doJSON(ctx context.Context, method, path string, body io.Reader, out any) error {
+	return c.doJSONWithClient(ctx, c.client, method, path, body, out)
+}
+
+func (c *Client) doJSONWithoutRetry(ctx context.Context, method, path string, body io.Reader, out any) error {
+	return c.doJSONWithClient(ctx, c.noRetryClient, method, path, body, out)
+}
+
+func (c *Client) doJSONWithClient(
+	ctx context.Context,
+	httpClient *http.Client,
+	method string,
+	path string,
+	body io.Reader,
+	out any,
+) error {
 	if err := c.acquire(ctx); err != nil {
 		return err
 	}
@@ -186,7 +206,7 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body io.Reader
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	resp, err := c.client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr

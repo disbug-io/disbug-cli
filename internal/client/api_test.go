@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/disbug-io/disbug-cli/internal/errfmt"
@@ -14,6 +15,154 @@ import (
 )
 
 var testSessionRef = ref.SessionRef{TeamSlug: "acme", ProjectID: 42, SessionNumber: 5}
+
+func TestSetPinStatusDoesNotRetryAndConfirmsAmbiguousSuccess(t *testing.T) {
+	postCalls := 0
+	getCalls := 0
+	doer := doerFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodPost && strings.HasSuffix(req.URL.Path, "/pins/by-number/2/status/"):
+			postCalls++
+			return nil, errors.New("response connection reset")
+		case req.Method == http.MethodGet && strings.HasSuffix(req.URL.Path, "/pins/by-number/2/"):
+			getCalls++
+			return response(http.StatusOK, io.NopCloser(strings.NewReader(`{
+				"number":2,
+				"status":"resolved",
+				"agent_log":[{
+					"action":"status_changed",
+					"pin_number":2,
+					"status":"resolved",
+					"note":"Fixed validation"
+				}]
+			}`))), nil
+		default:
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+			return nil, nil
+		}
+	})
+	c := New("https://api.example.test", "token", "test", &recordingSleeper{}, doer, nil)
+	pinRef := ref.PinRef{Session: testSessionRef, Pin: 2}
+
+	pin, err := c.SetPinStatus(context.Background(), pinRef, "resolved", "  Fixed validation  ")
+	if err != nil {
+		t.Fatalf("SetPinStatus() error = %v, want nil", err)
+	}
+	if got, want := pin.Status, "resolved"; got != want {
+		t.Fatalf("Status = %q, want %q", got, want)
+	}
+	if got, want := postCalls, 1; got != want {
+		t.Fatalf("POST calls = %d, want %d", got, want)
+	}
+	if got, want := getCalls, 1; got != want {
+		t.Fatalf("GET calls = %d, want %d", got, want)
+	}
+}
+
+func TestSetSessionStatusDoesNotRetryAndConfirmsAmbiguousSuccess(t *testing.T) {
+	postCalls := 0
+	getCalls := 0
+	doer := doerFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodPost && strings.HasSuffix(req.URL.Path, "/sessions/5/status/"):
+			postCalls++
+			return nil, errors.New("response connection reset")
+		case req.Method == http.MethodGet && strings.HasSuffix(req.URL.Path, "/sessions/5/"):
+			getCalls++
+			return response(http.StatusOK, io.NopCloser(strings.NewReader(`{
+				"project_session_number":5,
+				"status":"resolved",
+				"agent_log":[{
+					"action":"status_changed",
+					"pin_number":null,
+					"status":"resolved",
+					"note":"Verified all pins"
+				}]
+			}`))), nil
+		default:
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+			return nil, nil
+		}
+	})
+	c := New("https://api.example.test", "token", "test", &recordingSleeper{}, doer, nil)
+
+	session, err := c.SetSessionStatus(context.Background(), testSessionRef, "resolved", "Verified all pins")
+	if err != nil {
+		t.Fatalf("SetSessionStatus() error = %v, want nil", err)
+	}
+	if got, want := session.Status, "resolved"; got != want {
+		t.Fatalf("Status = %q, want %q", got, want)
+	}
+	if got, want := postCalls, 1; got != want {
+		t.Fatalf("POST calls = %d, want %d", got, want)
+	}
+	if got, want := getCalls, 1; got != want {
+		t.Fatalf("GET calls = %d, want %d", got, want)
+	}
+}
+
+func TestSetPinStatusReturnsAmbiguousErrorWhenReadbackDoesNotConfirm(t *testing.T) {
+	postCalls := 0
+	getCalls := 0
+	wantErr := errors.New("response connection reset")
+	doer := doerFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method == http.MethodPost {
+			postCalls++
+			return nil, wantErr
+		}
+		getCalls++
+		return response(http.StatusOK, io.NopCloser(strings.NewReader(`{
+			"number":2,
+			"status":"open",
+			"agent_log":[]
+		}`))), nil
+	})
+	c := New("https://api.example.test", "token", "test", &recordingSleeper{}, doer, nil)
+	pinRef := ref.PinRef{Session: testSessionRef, Pin: 2}
+
+	_, err := c.SetPinStatus(context.Background(), pinRef, "resolved", "Fixed validation")
+	if err == nil {
+		t.Fatal("SetPinStatus() error = nil, want original network error")
+	}
+	var networkErr *errfmt.NetworkError
+	if !errors.As(err, &networkErr) || !errors.Is(err, wantErr) {
+		t.Fatalf("SetPinStatus() error = %v, want wrapped network error", err)
+	}
+	if got, want := postCalls, 1; got != want {
+		t.Fatalf("POST calls = %d, want %d", got, want)
+	}
+	if got, want := getCalls, 1; got != want {
+		t.Fatalf("GET calls = %d, want %d", got, want)
+	}
+}
+
+func TestSetPinStatusDoesNotReadBackDefinitiveClientError(t *testing.T) {
+	postCalls := 0
+	getCalls := 0
+	doer := doerFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method == http.MethodGet {
+			getCalls++
+			t.Fatal("unexpected readback for definitive client error")
+		}
+		postCalls++
+		return response(http.StatusBadRequest, io.NopCloser(strings.NewReader(
+			`{"code":"unchanged_status","detail":"Pin is already resolved."}`,
+		))), nil
+	})
+	c := New("https://api.example.test", "token", "test", &recordingSleeper{}, doer, nil)
+	pinRef := ref.PinRef{Session: testSessionRef, Pin: 2}
+
+	_, err := c.SetPinStatus(context.Background(), pinRef, "resolved", "")
+	if err == nil {
+		t.Fatal("SetPinStatus() error = nil, want API error")
+	}
+	if got, want := postCalls, 1; got != want {
+		t.Fatalf("POST calls = %d, want %d", got, want)
+	}
+	if getCalls != 0 {
+		t.Fatalf("GET calls = %d, want 0", getCalls)
+	}
+}
 
 func TestListSessions(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -41,6 +190,7 @@ func TestListSessions(t *testing.T) {
 		_, _ = io.WriteString(w, `{
 			"results":[{
 				"id":123,
+				"title":"Checkout failure",
 				"team_slug":"acme",
 				"project":{"id":42,"slug":"42","name":"Website"},
 				"project_session_number":5,
@@ -51,7 +201,8 @@ func TestListSessions(t *testing.T) {
 				"first_pin_feedback":"broken button",
 				"reporter":{"email":"r@example.test","display_name":"Reporter"},
 				"updated_at":"2026-05-01T12:00:00Z",
-				"free_tier_locked":true
+				"free_tier_locked":true,
+				"attachments":[{"id":9,"pin_number":2,"filename":"notes.md","content_type":"text/markdown","size_bytes":42}]
 			}],
 			"next_cursor":"next-2",
 			"count":3,
@@ -83,6 +234,15 @@ func TestListSessions(t *testing.T) {
 	}
 	if got, want := resp.Results[0].FirstPinFeedback, "broken button"; got != want {
 		t.Fatalf("FirstPinFeedback = %q, want %q", got, want)
+	}
+	if got, want := resp.Results[0].Title, "Checkout failure"; got != want {
+		t.Fatalf("Title = %q, want %q", got, want)
+	}
+	if got, want := resp.Results[0].Attachments[0].Filename, "notes.md"; got != want {
+		t.Fatalf("Attachments[0].Filename = %q, want %q", got, want)
+	}
+	if got, want := resp.Results[0].Attachments[0].PinNumber, int64(2); got != want {
+		t.Fatalf("Attachments[0].PinNumber = %d, want %d", got, want)
 	}
 	if resp.NextCursor == nil || *resp.NextCursor != "next-2" {
 		t.Fatalf("NextCursor = %v, want next-2", resp.NextCursor)
@@ -312,6 +472,7 @@ func TestGetSession(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{
 			"id":123,
+			"title":"Checkout failure",
 			"team_slug":"acme",
 			"project_session_number":5,
 			"report_url":"https://app.disbug.test/acme/projects/42/sessions/5/",
@@ -327,7 +488,8 @@ func TestGetSession(t *testing.T) {
 				"url":"https://example.test/page#pin",
 				"selector":"#submit",
 				"element_info":{"tag":"button"},
-				"metadata":{"viewport":"mobile"}
+				"metadata":{"viewport":"mobile"},
+				"attachments":[{"id":9,"filename":"notes.md","content_type":"text/markdown","size_bytes":42}]
 			}]
 		}`)
 	}))
@@ -345,6 +507,9 @@ func TestGetSession(t *testing.T) {
 	if got, want := session.Project.Name, "Website"; got != want {
 		t.Fatalf("Project.Name = %q, want %q", got, want)
 	}
+	if got, want := session.Title, "Checkout failure"; got != want {
+		t.Fatalf("Title = %q, want %q", got, want)
+	}
 	if got, want := len(session.Pins), 1; got != want {
 		t.Fatalf("len(Pins) = %d, want %d", got, want)
 	}
@@ -359,6 +524,9 @@ func TestGetSession(t *testing.T) {
 	}
 	if got, want := session.Pins[0].ElementInfo["tag"], "button"; got != want {
 		t.Fatalf("ElementInfo[tag] = %v, want %q", got, want)
+	}
+	if got, want := session.Pins[0].Attachments[0].Filename, "notes.md"; got != want {
+		t.Fatalf("Attachments[0].Filename = %q, want %q", got, want)
 	}
 }
 
@@ -440,6 +608,7 @@ func TestGetPin_FieldsParam(t *testing.T) {
 			"id":456,
 			"number":7,
 			"feedback":"broken button",
+			"attachments":[{"id":9,"filename":"notes.md","content_type":"text/markdown","size_bytes":42}],
 			"console":[{"level":"error","message":"boom"}],
 			"network":[{"method":"GET","url":"https://example.test/api","status":500}]
 		}`)
@@ -457,6 +626,9 @@ func TestGetPin_FieldsParam(t *testing.T) {
 	}
 	if got, want := len(pin.Network), 1; got != want {
 		t.Fatalf("len(Network) = %d, want %d", got, want)
+	}
+	if got, want := pin.Attachments[0].Filename, "notes.md"; got != want {
+		t.Fatalf("Attachments[0].Filename = %q, want %q", got, want)
 	}
 }
 

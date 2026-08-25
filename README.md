@@ -32,6 +32,9 @@ disbug doctor                # verify login, backend, MCP, and skill setup
 disbug sessions --status open
 disbug session https://app.disbug.io/acme/projects/2/sessions/5/
 disbug pin 'https://app.disbug.io/acme/projects/2/sessions/5/?pin=1' --fields console,network
+disbug attachment download 'https://app.disbug.io/acme/projects/2/sessions/5/?pin=1' 42 --output ./notes.md
+disbug pin status 'https://app.disbug.io/acme/projects/2/sessions/5/?pin=1' resolved --note 'Fixed and verified checkout validation.'
+disbug session status https://app.disbug.io/acme/projects/2/sessions/5/ resolved --note 'All reported pins verified.'
 disbug inspect ./disbug-report-example.json
 ```
 
@@ -53,7 +56,7 @@ disbug inspect ./disbug-report-example.json --pin 2 --fields screenshot,replay
 
 ### Use as an MCP server
 
-Disbug exposes read-only MCP tools for cloud reports: `whoami`, `list_sessions`, `get_session`, `get_pin`, `get_pins`, `search_sessions`, and `search_pins`.
+Disbug exposes read MCP tools for cloud reports: `whoami`, `list_sessions`, `get_session`, `get_pin`, `get_pins`, `download_attachment`, `search_sessions`, and `search_pins`. Session and pin results include attachment filenames and IDs; `download_attachment` returns the selected file's content directly to the agent. Explicit status writes use `set_session_status` and `set_pin_status`; both accept an optional agent note.
 
 For downloaded local report JSON files, use `inspect_local_report` with a filesystem path. It returns the same lightweight summary as `disbug inspect`, and can inspect a single pin with selected fields without needing native host setup or a cloud upload.
 

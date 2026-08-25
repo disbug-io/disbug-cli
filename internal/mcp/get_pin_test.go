@@ -33,6 +33,7 @@ func TestGetPin_InProcess(t *testing.T) {
 				"selector":null,
 				"element_info":{},
 				"metadata":{},
+				"attachments":[{"id":9,"filename":"notes.md","content_type":"text/markdown","size_bytes":42}],
 				"screenshot":null,
 				"session_replay":null,
 				"voice_note":null,
@@ -63,6 +64,9 @@ func TestGetPin_InProcess(t *testing.T) {
 	text := firstTextContent(t, res)
 	if !strings.Contains(text, "button still broken") {
 		t.Fatalf("get_pin content = %q, want pin feedback", text)
+	}
+	if !strings.Contains(text, "notes.md") {
+		t.Fatalf("get_pin content = %q, want attachment filename", text)
 	}
 
 	req := waitForRequest(t, requests, "/api/me/")

@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -24,6 +25,7 @@ func TestSessionDetailSuccess(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{
 			"id":7392,
+			"title":"Checkout button failure",
 			"team_slug":"abb",
 			"project_session_number":5,
 			"status":"open",
@@ -90,6 +92,7 @@ func TestSessionPrettyOutput(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{
 			"id":7392,
+			"title":"Checkout button failure",
 			"status":"resolved",
 			"project":null,
 			"reporter":null,
@@ -108,11 +111,46 @@ func TestSessionPrettyOutput(t *testing.T) {
 	if got := stderr; got != "" {
 		t.Fatalf("stderr = %q, want empty", got)
 	}
-	if got := stdout; !bytes.Contains([]byte(got), []byte("{\n  \"team_slug\":")) {
+	if got := stdout; !bytes.Contains([]byte(got), []byte("{\n  \"title\": \"Checkout button failure\",\n  \"team_slug\":")) {
 		t.Fatalf("stdout = %q, want indented JSON", got)
 	}
 	if got := stdout; bytes.Contains([]byte(got), []byte(`"id": 7392`)) {
 		t.Fatalf("stdout = %q, should not expose session database id", got)
+	}
+}
+
+func TestSessionStatusUpdatesWithOptionalNote(t *testing.T) {
+	reportURL := "https://staging.disbug.us/abb/projects/2/sessions/5/"
+	var body map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/me/":
+			_, _ = io.WriteString(w, `{"agent_name":"codex","capabilities":["status_updates"]}`)
+		case "/api/teams/abb/projects/2/sessions/5/status/":
+			if r.Method != http.MethodPost {
+				t.Fatalf("method = %q, want POST", r.Method)
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			_, _ = io.WriteString(w, `{"team_slug":"abb","project_session_number":5,"status":"dismissed","pins":[],"agent_log":[]}`)
+		default:
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	setupClient(t, srv)
+
+	stdout, stderr, err := executeSession(t, "session", "status", reportURL, "dismissed", "--note", "Not reproducible")
+	if err != nil {
+		t.Fatalf("Execute() error = %v; stderr=%q", err, stderr)
+	}
+	if body["status"] != "dismissed" || body["note"] != "Not reproducible" {
+		t.Fatalf("body = %#v", body)
+	}
+	if !bytes.Contains([]byte(stdout), []byte(`"status":"dismissed"`)) {
+		t.Fatalf("stdout = %q, want updated status", stdout)
 	}
 }
 

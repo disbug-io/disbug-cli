@@ -1,13 +1,17 @@
 package client
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
+	"github.com/disbug-io/disbug-cli/internal/errfmt"
 	"github.com/disbug-io/disbug-cli/internal/ref"
 )
 
@@ -26,18 +30,20 @@ type Reporter struct {
 
 // SessionSummary is a compact session record returned by ListSessions.
 type SessionSummary struct {
-	TeamSlug             string    `json:"team_slug"`
-	Project              *Project  `json:"project"`
-	ProjectSessionNumber int64     `json:"project_session_number"`
-	ReportURL            string    `json:"report_url"`
-	URL                  string    `json:"url"`
-	Status               string    `json:"status"`
-	PinCount             int       `json:"pin_count"`
-	FirstPinFeedback     string    `json:"first_pin_feedback"`
-	Reporter             *Reporter `json:"reporter"`
-	CreatedAt            string    `json:"created_at"`
-	UpdatedAt            string    `json:"updated_at"`
-	FreeTierLocked       bool      `json:"free_tier_locked"`
+	Title                string              `json:"title"`
+	TeamSlug             string              `json:"team_slug"`
+	Project              *Project            `json:"project"`
+	ProjectSessionNumber int64               `json:"project_session_number"`
+	ReportURL            string              `json:"report_url"`
+	URL                  string              `json:"url"`
+	Status               string              `json:"status"`
+	PinCount             int                 `json:"pin_count"`
+	FirstPinFeedback     string              `json:"first_pin_feedback"`
+	Reporter             *Reporter           `json:"reporter"`
+	CreatedAt            string              `json:"created_at"`
+	UpdatedAt            string              `json:"updated_at"`
+	FreeTierLocked       bool                `json:"free_tier_locked"`
+	Attachments          []SessionAttachment `json:"attachments"`
 }
 
 // ListSessionsParams holds optional filters for ListSessions.
@@ -179,23 +185,54 @@ func searchPath(p *SearchParams, scope string) string {
 type PinLite struct {
 	Number      int64          `json:"number"`
 	Feedback    string         `json:"feedback"`
+	Status      string         `json:"status"`
 	URL         *string        `json:"url"`
 	Selector    *string        `json:"selector"`
 	ElementInfo map[string]any `json:"element_info"`
 	Metadata    map[string]any `json:"metadata"`
+	Attachments []Attachment   `json:"attachments"`
+}
+
+// Attachment is compact metadata for a file attached to a pin.
+type Attachment struct {
+	ID          int64  `json:"id"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	SizeBytes   int64  `json:"size_bytes"`
+}
+
+// SessionAttachment identifies an attachment and the pin that owns it in session summaries.
+type SessionAttachment struct {
+	Attachment
+	PinNumber int64 `json:"pin_number"`
+}
+
+// AgentActivity is an append-only agent pickup or status-change entry.
+type AgentActivity struct {
+	ID           int64  `json:"id"`
+	Action       string `json:"action"`
+	AgentID      *int64 `json:"agent_id"`
+	AgentDisplay string `json:"agent_display"`
+	PinNumber    *int64 `json:"pin_number"`
+	Field        string `json:"field"`
+	Status       string `json:"status"`
+	Note         string `json:"note"`
+	CreatedAt    string `json:"created_at"`
 }
 
 // SessionDetail is a full session record with its pins.
 type SessionDetail struct {
-	TeamSlug             string    `json:"team_slug"`
-	Project              *Project  `json:"project"`
-	ProjectSessionNumber int64     `json:"project_session_number"`
-	ReportURL            string    `json:"report_url"`
-	Status               string    `json:"status"`
-	Reporter             *Reporter `json:"reporter"`
-	URL                  string    `json:"url"`
-	UpdatedAt            string    `json:"updated_at"`
-	Pins                 []PinLite `json:"pins"`
+	Title                string          `json:"title"`
+	TeamSlug             string          `json:"team_slug"`
+	Project              *Project        `json:"project"`
+	ProjectSessionNumber int64           `json:"project_session_number"`
+	ReportURL            string          `json:"report_url"`
+	Status               string          `json:"status"`
+	Reporter             *Reporter       `json:"reporter"`
+	URL                  string          `json:"url"`
+	UpdatedAt            string          `json:"updated_at"`
+	Pins                 []PinLite       `json:"pins"`
+	AgentLog             []AgentActivity `json:"agent_log"`
 }
 
 // SessionRef returns the scoped reference for this session summary.
@@ -243,6 +280,7 @@ type PinFull struct {
 	Console        []map[string]any `json:"console"`
 	Network        []map[string]any `json:"network"`
 	Events         []map[string]any `json:"events"`
+	AgentLog       []AgentActivity  `json:"agent_log"`
 }
 
 // PinFullResolved is a PinFull with asset URLs resolved to local file paths.
@@ -255,6 +293,7 @@ type PinFullResolved struct {
 	Console        []map[string]any `json:"console"`
 	Network        []map[string]any `json:"network"`
 	Events         []map[string]any `json:"events"`
+	AgentLog       []AgentActivity  `json:"agent_log"`
 }
 
 // ResolveReplay downloads the replay asset to a local cache file and returns
@@ -268,6 +307,7 @@ func (c *Client) ResolveReplay(ctx context.Context, pin *PinFull, sessionNumber,
 		Console:        pin.Console,
 		Network:        pin.Network,
 		Events:         pin.Events,
+		AgentLog:       pin.AgentLog,
 	}
 
 	if pin.SessionReplay != nil && pin.SessionReplay.URL != "" {
@@ -279,6 +319,156 @@ func (c *Client) ResolveReplay(ctx context.Context, pin *PinFull, sessionNumber,
 	}
 
 	return resolved, nil
+}
+
+// StatusUpdate requests an explicit status transition and optional agent note.
+type StatusUpdate struct {
+	Status string `json:"status"`
+	Note   string `json:"note,omitempty"`
+}
+
+// SessionStatusResult is the compact result of a session status mutation.
+type SessionStatusResult struct {
+	TeamSlug             string          `json:"team_slug"`
+	Project              *Project        `json:"project"`
+	ProjectSessionNumber int64           `json:"project_session_number"`
+	ReportURL            string          `json:"report_url"`
+	Status               string          `json:"status"`
+	AgentLog             []AgentActivity `json:"agent_log"`
+}
+
+// PinStatusResult is the compact result of a pin status mutation.
+type PinStatusResult struct {
+	Number   int64           `json:"number"`
+	Status   string          `json:"status"`
+	AgentLog []AgentActivity `json:"agent_log"`
+}
+
+// SetSessionStatus updates a scoped session and returns its identity, status, and agent activity.
+func (c *Client) SetSessionStatus(
+	ctx context.Context,
+	sessionRef ref.SessionRef,
+	status string,
+	note string,
+) (*SessionStatusResult, error) {
+	note = strings.TrimSpace(note)
+	body, err := json.Marshal(StatusUpdate{Status: status, Note: note})
+	if err != nil {
+		return nil, err
+	}
+
+	var session SessionStatusResult
+	if err := c.doJSONWithoutRetry(
+		ctx,
+		http.MethodPost,
+		scopedSessionPath(sessionRef)+"status/",
+		bytes.NewReader(body),
+		&session,
+	); err != nil {
+		if c.shouldConfirmStatusUpdate(ctx, err) {
+			confirmed, readErr := c.GetSession(ctx, sessionRef)
+			if readErr == nil && confirmed.Status == status && latestStatusActivityMatches(confirmed.AgentLog, nil, status, note) {
+				return sessionStatusResultFromDetail(confirmed), nil
+			}
+		}
+		return nil, err
+	}
+
+	return &session, nil
+}
+
+// SetPinStatus updates a scoped pin and returns its identity, status, and pin-specific agent activity.
+func (c *Client) SetPinStatus(
+	ctx context.Context,
+	pinRef ref.PinRef,
+	status string,
+	note string,
+) (*PinStatusResult, error) {
+	note = strings.TrimSpace(note)
+	body, err := json.Marshal(StatusUpdate{Status: status, Note: note})
+	if err != nil {
+		return nil, err
+	}
+
+	path := scopedSessionPath(pinRef.Session) + fmt.Sprintf("pins/by-number/%d/status/", pinRef.Pin)
+	var pin PinStatusResult
+	if err := c.doJSONWithoutRetry(ctx, http.MethodPost, path, bytes.NewReader(body), &pin); err != nil {
+		if c.shouldConfirmStatusUpdate(ctx, err) {
+			confirmed, readErr := c.GetPinByNumber(ctx, pinRef.Session, pinRef.Pin, nil)
+			if readErr == nil && confirmed.Status == status &&
+				latestStatusActivityMatches(confirmed.AgentLog, &pinRef.Pin, status, note) {
+				return pinStatusResultFromDetail(confirmed), nil
+			}
+		}
+		return nil, err
+	}
+
+	return &pin, nil
+}
+
+func sessionStatusResultFromDetail(session *SessionDetail) *SessionStatusResult {
+	return &SessionStatusResult{
+		TeamSlug:             session.TeamSlug,
+		Project:              session.Project,
+		ProjectSessionNumber: session.ProjectSessionNumber,
+		ReportURL:            session.ReportURL,
+		Status:               session.Status,
+		AgentLog:             session.AgentLog,
+	}
+}
+
+func pinStatusResultFromDetail(pin *PinFull) *PinStatusResult {
+	return &PinStatusResult{
+		Number:   pin.Number,
+		Status:   pin.Status,
+		AgentLog: pin.AgentLog,
+	}
+}
+
+func (c *Client) shouldConfirmStatusUpdate(ctx context.Context, err error) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+
+	var networkErr *errfmt.NetworkError
+	if errors.As(err, &networkErr) {
+		return true
+	}
+
+	var apiErr *errfmt.APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.StatusCode == http.StatusTooManyRequests || apiErr.StatusCode >= http.StatusInternalServerError
+	}
+
+	// A successful response with a truncated or malformed body is also ambiguous:
+	// the server may have committed the update before the response became unusable.
+	return true
+}
+
+func latestStatusActivityMatches(
+	activities []AgentActivity,
+	pinNumber *int64,
+	status string,
+	note string,
+) bool {
+	for i := len(activities) - 1; i >= 0; i-- {
+		activity := activities[i]
+		if activity.Action != "status_changed" || !samePinNumber(activity.PinNumber, pinNumber) {
+			continue
+		}
+
+		return activity.Status == status && activity.Note == note
+	}
+
+	return false
+}
+
+func samePinNumber(left *int64, right *int64) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+
+	return *left == *right
 }
 
 // GetPinByNumber calls GET /api/teams/{team}/projects/{project}/sessions/{number}/pins/by-number/{n}/.
