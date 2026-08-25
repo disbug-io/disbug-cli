@@ -30,13 +30,14 @@ type CLI struct {
 
 	Version kong.VersionFlag `name:"version" help:"Show version."`
 
-	Sessions SessionsCmd `cmd:"" name:"sessions" help:"List cloud sessions, optionally filtered by status or time."`
-	Session  SessionCmd  `cmd:"" name:"session" help:"Show a cloud session summary from its report URL."`
-	Pin      PinCmd      `cmd:"" name:"pin" help:"Fetch selected evidence for one pin from a report URL."`
-	Pins     PinsCmd     `cmd:"" name:"pins" help:"Fetch evidence for pins from multiple report URLs."`
-	Search   SearchCmd   `cmd:"" name:"search" help:"Search cloud sessions or pins."`
-	Watch    WatchCmd    `cmd:"" name:"watch" help:"Stream newly saved cloud sessions as events."`
-	Inspect  InspectCmd  `cmd:"" name:"inspect" help:"Inspect a downloaded local report JSON file."`
+	Sessions   SessionsCmd   `cmd:"" name:"sessions" help:"List cloud sessions, optionally filtered by status or time."`
+	Session    SessionCmd    `cmd:"" name:"session" help:"Show a cloud session summary from its report URL."`
+	Pin        PinCmd        `cmd:"" name:"pin" help:"Fetch selected evidence for one pin from a report URL."`
+	Pins       PinsCmd       `cmd:"" name:"pins" help:"Fetch evidence for pins from multiple report URLs."`
+	Attachment AttachmentCmd `cmd:"" name:"attachment" help:"Download a file attached to a cloud pin."`
+	Search     SearchCmd     `cmd:"" name:"search" help:"Search cloud sessions or pins."`
+	Watch      WatchCmd      `cmd:"" name:"watch" help:"Stream newly saved cloud sessions as events."`
+	Inspect    InspectCmd    `cmd:"" name:"inspect" help:"Inspect a downloaded local report JSON file."`
 
 	Login     LoginCmd     `cmd:"" name:"login" help:"Authenticate and save a Disbug token profile."`
 	Logout    LogoutCmd    `cmd:"" name:"logout" help:"Remove a saved Disbug token profile."`

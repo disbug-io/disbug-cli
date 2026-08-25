@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Attachment filenames and IDs in CLI and MCP session/pin results
+- CLI and MCP attachment downloads that return file contents directly to agents
+- Explicit session and pin status updates with optional agent activity notes
 - CLI: `login`, `logout`, `whoami`, `configure`, `doctor`, `sessions`, `session`, `pin`, `pins`, `search`, `watch`, `inspect`, `mcp`, `version`, `completion`
 - `disbug configure` for confirmed MCP and managed `using-disbug` skill setup in Codex, Claude Code, and Cursor
 - MCP server with cloud read tools plus path-based `inspect_local_report`, including workflow instructions for MCP-only agents

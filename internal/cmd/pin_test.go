@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -27,7 +28,7 @@ func TestPinFieldsAreWireEncoded(t *testing.T) {
 				t.Fatalf("fields query = %q, want %q", got, want)
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(w, `{"id":5827,"number":2,"feedback":"broken","element_info":{},"metadata":{}}`)
+			_, _ = io.WriteString(w, `{"id":5827,"number":2,"feedback":"broken","element_info":{},"metadata":{},"attachments":[{"id":9,"filename":"notes.md","content_type":"text/markdown","size_bytes":42}]}`)
 		default:
 			t.Fatalf("unexpected path %q", r.URL.Path)
 		}
@@ -50,6 +51,9 @@ func TestPinFieldsAreWireEncoded(t *testing.T) {
 	}
 	if got := stdout; !bytes.Contains([]byte(got), []byte(`"number":2`)) {
 		t.Fatalf("stdout = %q, want pin number", got)
+	}
+	if got := stdout; !bytes.Contains([]byte(got), []byte(`"filename":"notes.md"`)) {
+		t.Fatalf("stdout = %q, want attachment filename", got)
 	}
 }
 
@@ -191,6 +195,48 @@ func TestPinPrettyOutput(t *testing.T) {
 	}
 	if got := stdout; bytes.Contains([]byte(got), []byte(`"id": 5827`)) {
 		t.Fatalf("stdout = %q, should not expose pin database id", got)
+	}
+}
+
+func TestPinStatusUpdatesWithOptionalNote(t *testing.T) {
+	var body map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/me/":
+			writePinCapabilities(w, "status_updates")
+		case "/api/teams/abb/projects/2/sessions/5/pins/by-number/2/status/":
+			if r.Method != http.MethodPost {
+				t.Fatalf("method = %q, want POST", r.Method)
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			_, _ = io.WriteString(w, `{"number":2,"feedback":"broken","status":"resolved","element_info":{},"metadata":{},"agent_log":[]}`)
+		default:
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	setupClient(t, srv)
+
+	stdout, stderr, err := executePin(
+		t,
+		"pin",
+		"status",
+		testPinReportURL,
+		"resolved",
+		"--note",
+		"Fixed and verified",
+	)
+	if err != nil {
+		t.Fatalf("Execute() error = %v; stderr=%q", err, stderr)
+	}
+	if body["status"] != "resolved" || body["note"] != "Fixed and verified" {
+		t.Fatalf("body = %#v", body)
+	}
+	if !bytes.Contains([]byte(stdout), []byte(`"status":"resolved"`)) {
+		t.Fatalf("stdout = %q, want updated status", stdout)
 	}
 }
 

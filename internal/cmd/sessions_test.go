@@ -29,6 +29,7 @@ func TestSessionsBasicList(t *testing.T) {
 		_, _ = io.WriteString(w, `{
 			"results":[{
 				"id":123,
+				"title":"Checkout button failure",
 				"project":{"slug":"web","name":"Website"},
 				"url":"https://example.test/page",
 				"status":"open",
@@ -187,6 +188,7 @@ func TestSessionsPrettyOutput(t *testing.T) {
 		_, _ = io.WriteString(w, `{
 			"results":[{
 				"id":123,
+				"title":"Checkout button failure",
 				"project":null,
 				"url":"https://example.test/page",
 				"status":"resolved",
@@ -211,7 +213,10 @@ func TestSessionsPrettyOutput(t *testing.T) {
 	if got := stderr; got != "" {
 		t.Fatalf("stderr = %q, want empty", got)
 	}
-	if got := stdout; !bytes.Contains([]byte(got), []byte("{\n  \"results\": [\n    {\n      \"team_slug\":")) {
+	if got := stdout; !bytes.Contains(
+		[]byte(got),
+		[]byte("{\n  \"results\": [\n    {\n      \"title\": \"Checkout button failure\",\n      \"team_slug\":"),
+	) {
 		t.Fatalf("stdout = %q, want indented JSON", got)
 	}
 	if got := stdout; bytes.Contains([]byte(got), []byte(`"id": 123`)) {

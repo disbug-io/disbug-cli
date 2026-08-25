@@ -19,6 +19,7 @@ func TestListSessions_InProcess(t *testing.T) {
 		_, _ = io.WriteString(w, `{
 			"results":[{
 				"id":7392,
+				"title":"Checkout failure",
 				"team_slug":"abb",
 				"project":{"id":2,"slug":"2","name":"Web"},
 				"project_session_number":5,
@@ -29,7 +30,8 @@ func TestListSessions_InProcess(t *testing.T) {
 				"first_pin_feedback":"broken button",
 				"reporter":{"email":"user@example.test","display_name":"User"},
 				"updated_at":"2026-05-01T00:00:00Z",
-				"free_tier_locked":false
+				"free_tier_locked":false,
+				"attachments":[{"id":9,"pin_number":2,"filename":"notes.md","content_type":"text/markdown","size_bytes":42}]
 			}],
 			"next_cursor":null,
 			"count":1,
@@ -61,6 +63,9 @@ func TestListSessions_InProcess(t *testing.T) {
 	}
 	if !strings.Contains(text, `"status":"open"`) {
 		t.Fatalf("list_sessions content = %q, want compact JSON status", text)
+	}
+	if !strings.Contains(text, "Checkout failure") || !strings.Contains(text, "notes.md") {
+		t.Fatalf("list_sessions content = %q, want edited title and attachment filename", text)
 	}
 
 	req := waitForRequest(t, requests, "/api/sessions/")

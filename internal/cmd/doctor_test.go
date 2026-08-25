@@ -27,7 +27,7 @@ func TestDoctor_Healthy(t *testing.T) {
 			"team":"Disbug",
 			"team_slug":"disbug",
 			"api_version":"2026-05-01",
-			"capabilities":["search","pin_field_selection","scoped_session_lookup","scoped_pin_lookup"]
+			"capabilities":["search","pin_field_selection","scoped_session_lookup","scoped_pin_lookup","attachment_download"]
 		}`)
 	}))
 	t.Cleanup(srv.Close)
@@ -89,6 +89,7 @@ func TestDoctor_MissingCapability(t *testing.T) {
 		"pin_field_selection",
 		"scoped_session_lookup",
 		"scoped_pin_lookup",
+		"attachment_download",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("stdout = %q, want %q", stdout, want)
