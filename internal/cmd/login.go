@@ -36,6 +36,9 @@ type LoginCmd struct {
 	Token          *string `help:"Set token directly."`
 	TokenFromStdin bool    `name:"token-from-stdin" help:"Read token from the first stdin line."`
 	TokenFromEnv   bool    `name:"token-from-env" help:"Read token from DISBUG_LOGIN_TOKEN."`
+	suppressNext   bool
+	onboarding     bool
+	prompts        *bufio.Scanner
 }
 
 // Run executes the login flow.
@@ -85,11 +88,17 @@ func (c *LoginCmd) Run(ctx context.Context, b bindings) error {
 
 	_, err = fmt.Fprintf(
 		b.Stdout,
-		"Logged in as %s for team %s.\n\nNext, connect Disbug to your AI agent:\n  %s\n",
+		"Logged in as %s for team %s.\n",
 		emptyDefault(me.AgentName, name),
 		me.Team,
-		configureCommand(profileName),
 	)
+	if err == nil && !c.suppressNext {
+		_, err = fmt.Fprintf(
+			b.Stdout,
+			"\nNext, connect Disbug to your AI agent:\n  %s\n",
+			configureCommand(profileName),
+		)
+	}
 	return err
 }
 
@@ -169,6 +178,9 @@ func (c *LoginCmd) acquireBrowserToken(
 
 	callback := callbackURL(c.ListenAddr, listener.Port())
 	authURL := auth.BuildAuthURL(c.APIURL, callback, state, name)
+	if c.onboarding {
+		authURL = addOnboardingQuery(authURL)
+	}
 	if c.NoBrowser {
 		_, _ = fmt.Fprintf(b.Stderr, "Open this URL to log in:\n%s\n", authURL)
 	} else {
@@ -212,9 +224,16 @@ func (c *LoginCmd) acquireManualToken(b bindings, name string) (string, error) {
 	}
 	callback := fmt.Sprintf("http://127.0.0.1:%d/cb", port)
 	authURL := auth.BuildAuthURL(c.APIURL, callback, state, name)
+	if c.onboarding {
+		authURL = addOnboardingQuery(authURL)
+	}
 	_, _ = fmt.Fprintf(b.Stderr, "Open this URL to log in:\n%s\nPaste the final redirect URL here:\n", authURL)
 
-	rawPaste, err := readFirstLine(b.Stdin)
+	prompts := c.prompts
+	if prompts == nil {
+		prompts = bufio.NewScanner(b.Stdin)
+	}
+	rawPaste, err := readPromptLine(prompts)
 	if err != nil {
 		return "", err
 	}
@@ -227,6 +246,17 @@ func (c *LoginCmd) acquireManualToken(b bindings, name string) (string, error) {
 	}
 
 	return strings.TrimSpace(tokenStr), nil
+}
+
+func addOnboardingQuery(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+	query := parsed.Query()
+	query.Set("onboarding", "1")
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
 }
 
 func callbackURL(listenAddr string, port int) string {

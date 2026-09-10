@@ -76,7 +76,7 @@ func TestUpdateCheckDisabledSkipsProtocolAndOptOut(t *testing.T) {
 			t.Fatalf("updateCheckDisabled(%q) = false, want true", command)
 		}
 	}
-	for _, command := range []string{"session", "sessions", "doctor", "configure", "login", ""} {
+	for _, command := range []string{"session", "sessions", "doctor", "configure", "login", "onboard", ""} {
 		if updateCheckDisabled(command) {
 			t.Fatalf("updateCheckDisabled(%q) = true, want false", command)
 		}
@@ -95,8 +95,9 @@ func TestExecuteRootHelpExplainsGettingStartedAndConfigure(t *testing.T) {
 	err := Execute(context.Background(), []string{"--help"}, nil, &stdout, &stderr)
 
 	require.NoError(t, err)
-	assert.Contains(t, stdout.String(), "Getting started: disbug login, then disbug configure, then disbug doctor.")
+	assert.Contains(t, stdout.String(), "Getting started: disbug onboard for guided setup.")
 	assert.Contains(t, stdout.String(), "configure")
+	assert.Contains(t, stdout.String(), "onboard")
 	assert.Contains(t, stdout.String(), "Run disbug <command> --help")
 	assert.Empty(t, stderr.String())
 }

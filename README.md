@@ -25,6 +25,34 @@ Grab a binary for your OS/arch from [Releases](https://github.com/disbug-io/disb
 
 ## Quickstart
 
+For guided setup, run `disbug onboard`. It connects your account in the browser,
+asks you to choose Developer, QA / Reporter, or Widget, and guides the selected
+project through setup. Developer setup detects the extension before configuring
+your coding agent; QA leaves agent configuration alone. Widget setup returns
+project-specific instructions for your agent to apply after approval.
+
+Use `--api-url http://localhost:8000` for a local backend, `--no-browser` to print
+browser URLs, or `--manual` to paste the redirect URL privately into the terminal
+when a loopback callback cannot reach the CLI. The browser callback is correlated
+with a random `state` and the CLI waits for up to five minutes. Keep the process
+running while completing browser authorization.
+
+Agents can read progress without prompts or wait for a verified milestone:
+
+```bash
+disbug onboard --status
+disbug onboard --wait-for extension_installed
+disbug onboard --wait-for first_report_captured --project-id 42
+```
+
+These return JSON using the saved profile (`--profile work` is supported). Waits
+time out after five minutes and can be rerun. Pass the selected project ID when it
+is not the default project. `agent_connected` confirms account authorization;
+`disbug doctor` checks local agent configuration. `widget_configured` confirms
+ingestion is enabled, not that the widget has been installed on a site.
+
+For individual setup steps:
+
 ```bash
 disbug login                 # authenticate in the browser
 disbug configure             # connect detected agents and install the workflow skill

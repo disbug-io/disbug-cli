@@ -233,7 +233,7 @@ func readPromptLine(scanner *bufio.Scanner) (string, error) {
 		if err := scanner.Err(); err != nil {
 			return "", err
 		}
-		return "", errfmt.UsageError{Message: "input ended before configuration was confirmed; rerun with --yes for non-interactive use"}
+		return "", errfmt.UsageError{Message: "input ended before the interactive prompt was answered"}
 	}
 	return scanner.Text(), nil
 }
