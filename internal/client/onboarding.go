@@ -46,8 +46,18 @@ type Onboarding struct {
 	SelectedProjectID   *int                `json:"selected_project_id"`
 	Progress            OnboardingProgress  `json:"progress"`
 	ExtensionInstallURL string              `json:"extension_install_url"`
+	ExtensionWelcomeURL string              `json:"extension_welcome_url"`
 	OnboardingURL       string              `json:"onboarding_url"`
 	WidgetSetupURL      string              `json:"widget_setup_url"`
+}
+
+// OnboardingAgent is the persistent Developer credential created from a setup session.
+type OnboardingAgent struct {
+	Token          string `json:"token"`
+	AgentName      string `json:"agent_name"`
+	Team           string `json:"team"`
+	TeamSlug       string `json:"team_slug"`
+	CreatedByEmail string `json:"created_by_email"`
 }
 
 // OnboardingSelection persists the user's path and project choice.
@@ -91,4 +101,21 @@ func (c *Client) SelectOnboarding(
 	}
 
 	return &onboarding, nil
+}
+
+// ActivateOnboardingAgent exchanges a short-lived setup session for a persistent Developer token.
+func (c *Client) ActivateOnboardingAgent(ctx context.Context, name string) (*OnboardingAgent, error) {
+	body, err := json.Marshal(struct {
+		Name string `json:"name"`
+	}{Name: name})
+	if err != nil {
+		return nil, err
+	}
+
+	var agent OnboardingAgent
+	if err := c.doJSON(ctx, http.MethodPost, "/api/onboarding/agent/", bytes.NewReader(body), &agent); err != nil {
+		return nil, err
+	}
+
+	return &agent, nil
 }

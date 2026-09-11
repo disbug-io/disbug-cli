@@ -15,7 +15,7 @@ import (
 	"github.com/disbug-io/disbug-cli/internal/seams"
 )
 
-var callbackTokenPattern = regexp.MustCompile(`^dba_[A-Za-z0-9]{24}$`)
+var callbackTokenPattern = regexp.MustCompile(`^(?:dba_[A-Za-z0-9]{24}|dbo_[A-Za-z0-9]{32})$`)
 
 // CallbackResult is the token callback result returned by Listener.Wait.
 type CallbackResult struct {

@@ -25,11 +25,11 @@ Grab a binary for your OS/arch from [Releases](https://github.com/disbug-io/disb
 
 ## Quickstart
 
-For guided setup, run `disbug onboard`. It connects your account in the browser,
-asks you to choose Developer, QA / Reporter, or Widget, and guides the selected
-project through setup. Developer setup detects the extension before configuring
-your coding agent; QA leaves agent configuration alone. Widget setup returns
-project-specific instructions for your agent to apply after approval.
+For the short Developer setup, identify the invoking coding agent and run, for
+example, `disbug onboard --agent codex`. The CLI opens account authorization,
+uses the default project, creates the default-named Disbug agent, configures the
+selected coding agent, and prints the Chrome Web Store URL. It does not open the
+store automatically.
 
 Use `--api-url http://localhost:8000` for a local backend, `--no-browser` to print
 browser URLs, or `--manual` to paste the redirect URL privately into the terminal

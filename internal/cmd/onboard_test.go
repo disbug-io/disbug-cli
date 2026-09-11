@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -9,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -23,7 +24,10 @@ import (
 	"github.com/disbug-io/disbug-cli/internal/token"
 )
 
-func TestOnboardQAUsesExistingLoginAndDefaultProject(t *testing.T) {
+const onboardingTestToken = "dbo_1234567890ABCDEFGHIJKLMNOPQRSTUV"
+
+func TestOnboardUsesDeveloperAndDefaultProjectWithoutChoicePrompts(t *testing.T) {
+	setupOnboardingAgent(t)
 	server, selected := newOnboardingBackend(t, true)
 	defer server.Close()
 	writeOnboardingProfile(t, server.URL)
@@ -32,75 +36,35 @@ func TestOnboardQAUsesExistingLoginAndDefaultProject(t *testing.T) {
 	var stderr bytes.Buffer
 	err := Execute(
 		context.Background(),
-		[]string{"onboard"},
-		strings.NewReader("y\n2\n"),
+		[]string{"onboard", "--agent", "codex"},
+		strings.NewReader("y\nn\n"),
 		&stdout,
 		&stderr,
 	)
 
 	require.NoError(t, err)
 	assert.Empty(t, stderr.String())
-	assert.Contains(t, stdout.String(), "Choose your setup path:")
-	assert.Contains(t, stdout.String(), "1. Developer")
-	assert.Contains(t, stdout.String(), "2. QA / Reporter")
-	assert.Contains(t, stdout.String(), "Using project: Default project")
+	assert.NotContains(t, stdout.String(), "Choose your setup path:")
+	assert.NotContains(t, stdout.String(), "Choose a Disbug project:")
+	assert.NotContains(t, stdout.String(), "Choose the coding agent")
+	assert.Contains(t, stdout.String(), "Using Developer with Default project.")
+	assert.NotContains(t, stdout.String(), "(ID:")
 	assert.Contains(t, stdout.String(), "Chrome extension already detected")
-	assert.Contains(t, stdout.String(), "QA setup complete")
-	assert.Equal(t, onboardingSelection{Path: "qa", ProjectID: 11}, <-selected)
+	assert.Contains(t, stdout.String(), "Would you like to capture your first bug")
+	assert.Equal(t, onboardingSelection{Path: "agent", ProjectID: 11}, <-selected)
 }
 
-func TestOnboardWidgetAsksBeforeRepositoryChanges(t *testing.T) {
-	server, selected := newOnboardingBackend(t, false)
-	defer server.Close()
-	writeOnboardingProfile(t, server.URL)
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	err := Execute(
-		context.Background(),
-		[]string{"onboard"},
-		strings.NewReader("y\n3\ny\n"),
-		&stdout,
-		&stderr,
-	)
-
-	require.NoError(t, err)
-	assert.Empty(t, stderr.String())
-	assert.Contains(t, stdout.String(), "Allow the coding agent to modify this repository")
-	assert.Contains(t, stdout.String(), "Widget installation approved")
-	assert.Contains(t, stdout.String(), "https://disbug.example/agent-setup/widget/11/key/")
-	assert.Equal(t, onboardingSelection{Path: "widget", ProjectID: 11}, <-selected)
-}
-
-func TestChooseOnboardingProjectPromptsOnlyForMultipleProjects(t *testing.T) {
+func TestDefaultOnboardingProjectUsesAPIDefaultWithoutPrompt(t *testing.T) {
 	defaultID := 2
 	projects := []client.OnboardingProject{
 		{ID: 1, Name: "API"},
 		{ID: 2, Name: "Website", IsDefault: true},
 	}
 
-	var stdout bytes.Buffer
-	project, err := chooseOnboardingProject(
-		bindings{Stdin: strings.NewReader(""), Stdout: &stdout, Stderr: io.Discard},
-		bufioScanner("\n"),
-		projects,
-		&defaultID,
-	)
+	project, err := defaultOnboardingProject(projects, &defaultID)
 
 	require.NoError(t, err)
 	assert.Equal(t, 2, project.ID)
-	assert.Contains(t, stdout.String(), "Choose a Disbug project:")
-	assert.Contains(t, stdout.String(), "Website (default)")
-}
-
-func TestOnboardDeclinedWidgetDoesNotEnableIngestion(t *testing.T) {
-	server, selected := newOnboardingBackend(t, false)
-	defer server.Close()
-	writeOnboardingProfile(t, server.URL)
-	var stdout bytes.Buffer
-	require.NoError(t, Execute(context.Background(), []string{"onboard"}, strings.NewReader("y\n3\nn\n"), &stdout, io.Discard))
-	assert.Empty(t, selected)
-	assert.Contains(t, stdout.String(), "Widget setup skipped")
 }
 
 func TestOnboardStatusHasNoPromptsOrWrites(t *testing.T) {
@@ -115,17 +79,15 @@ func TestOnboardStatusHasNoPromptsOrWrites(t *testing.T) {
 	assert.Empty(t, selected)
 }
 
-func TestOnboardDoesNotReuseProfileForDifferentServer(t *testing.T) {
-	writeOnboardingProfile(t, "https://old.example")
+func TestOnboardRejectsUnsupportedAgentBeforeLogin(t *testing.T) {
 	var stdout bytes.Buffer
-	err := Execute(context.Background(), []string{"onboard", "--api-url", "https://new.example"}, strings.NewReader("n\n"), &stdout, io.Discard)
-	require.Error(t, err)
-	assert.NotContains(t, stdout.String(), "Continue with the existing")
-	assert.Equal(t, "https://old.example", readLoginProfile(t, "default").APIURL)
+	err := Execute(context.Background(), []string{"onboard", "--agent", "other"}, strings.NewReader(""), &stdout, io.Discard)
+	require.ErrorContains(t, err, "unsupported agent")
+	assert.NotContains(t, stdout.String(), "Opening browser")
 }
 
-func TestOnboardBrowserCallbackContinuesIntoQA(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+func TestOnboardBrowserCallbackCreatesPersistentAgentAndContinues(t *testing.T) {
+	setupOnboardingAgent(t)
 	t.Setenv("DISBUG_ENABLE_TEST_HOOKS", "1")
 	t.Setenv("DISBUG_TEST_FAST_SLEEP", "1")
 	server, selected := newOnboardingBackend(t, true)
@@ -143,7 +105,7 @@ func TestOnboardBrowserCallbackContinuesIntoQA(t *testing.T) {
 		}
 		query := callback.Query()
 		query.Set("state", parsed.Query().Get("state"))
-		query.Set("token", loginTestToken)
+		query.Set("token", onboardingTestToken)
 		callback.RawQuery = query.Encode()
 		resp, err := http.Get(callback.String()) //nolint:gosec,noctx // Exercise the local browser callback.
 		if err != nil {
@@ -153,14 +115,24 @@ func TestOnboardBrowserCallbackContinuesIntoQA(t *testing.T) {
 	})
 	defer auth.SwapBrowserOpener(previous)
 	var stdout bytes.Buffer
-	require.NoError(t, Execute(context.Background(), []string{"onboard", "--api-url", server.URL}, strings.NewReader("y\n2\n"), &stdout, io.Discard))
-	assert.Equal(t, "qa", (<-selected).Path)
-	assert.Contains(t, stdout.String(), "QA setup complete")
+	require.NoError(t, Execute(
+		context.Background(),
+		[]string{"onboard", "--agent", "codex", "--api-url", server.URL},
+		strings.NewReader("n\n"),
+		&stdout,
+		io.Discard,
+	))
+	assert.Equal(t, "agent", (<-selected).Path)
+	assert.Contains(t, stdout.String(), "Browser authorization complete")
+	assert.Contains(t, stdout.String(), "Created agent")
 	assert.NotContains(t, stdout.String(), loginTestToken)
+	assert.NotContains(t, stdout.String(), onboardingTestToken)
+	profile := readLoginProfile(t, "default")
+	assert.Equal(t, loginTestToken, profile.Token)
 }
 
 func TestOnboardManualSharesBufferedPromptInput(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	setupOnboardingAgent(t)
 	t.Setenv("DISBUG_ENABLE_TEST_HOOKS", "1")
 	t.Setenv("DISBUG_TEST_DETERMINISTIC_RANDOM", "onboard-manual")
 	server, selected := newOnboardingBackend(t, true)
@@ -168,11 +140,17 @@ func TestOnboardManualSharesBufferedPromptInput(t *testing.T) {
 	// The same deterministic state is generated inside manual login.
 	state, err := auth.GenerateState(nil)
 	require.NoError(t, err)
-	input := "y\nhttp://127.0.0.1:1234/cb?token=" + loginTestToken + "&state=" + state + "\n2\n"
+	input := "http://127.0.0.1:1234/cb?token=" + onboardingTestToken + "&state=" + state + "\nn\n"
 	var stdout bytes.Buffer
-	require.NoError(t, Execute(context.Background(), []string{"onboard", "--manual", "--api-url", server.URL}, strings.NewReader(input), &stdout, io.Discard))
-	assert.Equal(t, "qa", (<-selected).Path)
-	assert.Contains(t, stdout.String(), "QA setup complete")
+	require.NoError(t, Execute(
+		context.Background(),
+		[]string{"onboard", "--manual", "--agent", "codex", "--api-url", server.URL},
+		strings.NewReader(input),
+		&stdout,
+		io.Discard,
+	))
+	assert.Equal(t, "agent", (<-selected).Path)
+	assert.Contains(t, stdout.String(), "Developer setup complete")
 }
 
 func TestWaitForOnboardingTracksProjectUntilMilestone(t *testing.T) {
@@ -217,7 +195,7 @@ func newOnboardingBackend(t *testing.T, extensionInstalled bool) (*httptest.Serv
 			_, _ = io.WriteString(w, `{
 				"agent_name":"Codex","team":"Acme","team_slug":"acme",
 				"created_by_email":"owner@example.com","api_version":"1.0.0",
-				"capabilities":["onboarding_setup"]
+				"capabilities":["onboarding_setup","search","pin_field_selection","scoped_session_lookup","scoped_pin_lookup","attachment_download"]
 			}`)
 		case "/api/onboarding/":
 			if r.Method == http.MethodPost {
@@ -232,6 +210,17 @@ func newOnboardingBackend(t *testing.T, extensionInstalled bool) (*httptest.Serv
 				return
 			}
 			_, _ = io.WriteString(w, onboardingJSON(extensionInstalled, ""))
+		case "/api/onboarding/agent/":
+			assert.Equal(t, "Bearer "+onboardingTestToken, r.Header.Get("Authorization"))
+			var request struct {
+				Name string `json:"name"`
+			}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+			assert.NotEmpty(t, request.Name)
+			_, _ = io.WriteString(w, `{
+				"token":"`+loginTestToken+`","agent_name":"`+request.Name+`",
+				"team":"Acme","team_slug":"acme","created_by_email":"owner@example.com"
+			}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -250,7 +239,8 @@ func onboardingJSON(extensionInstalled bool, suffix string) string {
 			{"value":"widget","label":"Widget","modifies_repository":true}
 		],
 		"progress":{"extension_installed":` + strconv.FormatBool(extensionInstalled) + `,"agent_connected":true},
-		"extension_install_url":"https://chrome.example/extension"` + suffix + `
+		"extension_install_url":"https://chrome.example/extension",
+		"extension_welcome_url":"http://localhost:8000/extension/welcome/"` + suffix + `
 	}`
 }
 
@@ -265,6 +255,13 @@ func writeOnboardingProfile(t *testing.T, apiURL string) {
 	}, false))
 }
 
-func bufioScanner(input string) *bufio.Scanner {
-	return bufio.NewScanner(strings.NewReader(input))
+func setupOnboardingAgent(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	binDir := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	codexPath := filepath.Join(binDir, "codex")
+	require.NoError(t, os.WriteFile(codexPath, []byte("#!/bin/sh\nexit 0\n"), 0o755))
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 }

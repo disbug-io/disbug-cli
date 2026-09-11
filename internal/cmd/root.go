@@ -40,7 +40,7 @@ type CLI struct {
 	Inspect    InspectCmd    `cmd:"" name:"inspect" help:"Inspect a downloaded local report JSON file."`
 
 	Login     LoginCmd     `cmd:"" name:"login" help:"Authenticate and save a Disbug token profile."`
-	Onboard   OnboardCmd   `cmd:"" name:"onboard" help:"Interactively authenticate and set up Disbug."`
+	Onboard   OnboardCmd   `cmd:"" name:"onboard" help:"Run the short automated Developer onboarding flow."`
 	Logout    LogoutCmd    `cmd:"" name:"logout" help:"Remove a saved Disbug token profile."`
 	Whoami    WhoamiCmd    `cmd:"" name:"whoami" help:"Show the authenticated agent and team."`
 	Configure ConfigureCmd `cmd:"" name:"configure" help:"Connect Disbug MCP and its workflow skill to AI coding agents."`

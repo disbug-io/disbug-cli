@@ -79,3 +79,35 @@ func TestSelectOnboarding(t *testing.T) {
 		t.Fatalf("SelectOnboarding() = %#v, want widget response", onboarding)
 	}
 }
+
+func TestActivateOnboardingAgent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/onboarding/agent/" {
+			t.Fatalf("request = %s %s, want POST /api/onboarding/agent/", r.Method, r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer dbo_setup" {
+			t.Fatalf("Authorization = %q, want setup token", got)
+		}
+		var request struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if request.Name != "workstation" {
+			t.Fatalf("name = %q, want workstation", request.Name)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"token":"dba_agent","agent_name":"workstation","team":"Acme","team_slug":"acme","created_by_email":"owner@example.com"}`)
+	}))
+	t.Cleanup(server.Close)
+
+	apiClient := New(server.URL, "dbo_setup", "test", nil, server.Client(), nil)
+	agent, err := apiClient.ActivateOnboardingAgent(context.Background(), "workstation")
+	if err != nil {
+		t.Fatalf("ActivateOnboardingAgent() error = %v", err)
+	}
+	if agent.Token != "dba_agent" || agent.TeamSlug != "acme" {
+		t.Fatalf("ActivateOnboardingAgent() = %#v", agent)
+	}
+}

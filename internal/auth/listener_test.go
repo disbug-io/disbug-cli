@@ -15,7 +15,10 @@ import (
 	"github.com/disbug-io/disbug-cli/internal/seams"
 )
 
-const validToken = "dba_1234567890ABCDEFGHIJKLMN"
+const (
+	validToken           = "dba_1234567890ABCDEFGHIJKLMN"
+	validOnboardingToken = "dbo_1234567890ABCDEFGHIJKLMNOPQRSTUV"
+)
 
 func TestListenerHappyPath(t *testing.T) {
 	listener, err := NewListener("STATE123", []byte("ok"), []byte("err"), "", nil, nil)
@@ -47,6 +50,27 @@ func TestListenerHappyPath(t *testing.T) {
 	}
 	if got, want := result.State, "STATE123"; got != want {
 		t.Fatalf("State = %q, want %q", got, want)
+	}
+}
+
+func TestListenerAcceptsOnboardingToken(t *testing.T) {
+	listener, err := NewListener("STATE123", []byte("ok"), []byte("err"), "", nil, nil)
+	if err != nil {
+		t.Fatalf("NewListener() error = %v, want nil", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+
+	resp := getCallback(t, listener, validOnboardingToken, "STATE123")
+	if got, want := resp.StatusCode, http.StatusOK; got != want {
+		t.Fatalf("status = %d, want %d", got, want)
+	}
+	_ = readBody(t, resp)
+	result, err := listener.Wait(context.Background(), time.Second)
+	if err != nil {
+		t.Fatalf("Wait() error = %v, want nil", err)
+	}
+	if result.Token != validOnboardingToken {
+		t.Fatalf("Token = %q, want onboarding token", result.Token)
 	}
 }
 
