@@ -145,6 +145,17 @@ func TestLoginRespectsListenAddr(t *testing.T) {
 	}
 }
 
+func TestAddOnboardingQueryPreservesAgentAuthParameters(t *testing.T) {
+	rawURL := "https://disbug.example/agent-auth/?callback=http%3A%2F%2F127.0.0.1%3A1234%2Fcb&state=nonce"
+
+	result := addOnboardingQuery(rawURL)
+	parsed, err := url.Parse(result)
+	require.NoError(t, err)
+	assert.Equal(t, "1", parsed.Query().Get("onboarding"))
+	assert.Equal(t, "nonce", parsed.Query().Get("state"))
+	assert.Equal(t, "http://127.0.0.1:1234/cb", parsed.Query().Get("callback"))
+}
+
 func TestLoginTokenFromStdinPersistsToken(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("DISBUG_ENABLE_TEST_HOOKS", "1")
