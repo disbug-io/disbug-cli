@@ -43,10 +43,10 @@ brews:
     install: |
       bin.install "disbug"
     caveats: |
-      Installation complete. Now use Disbug login to log in.
+      Installation complete. Now run the guided Disbug onboarding flow.
 
       Run:
-        disbug login
+        disbug onboard
     test: |
       system "#{bin}/disbug --version"
 
@@ -59,4 +59,4 @@ scoops:
     description: Disbug CLI and MCP server for AI coding agents
     license: MIT
     post_install:
-      - 'Write-Host "Installation complete. Now use Disbug login to log in: disbug login"'
+      - 'Write-Host "Installation complete. Now run the guided Disbug onboarding flow: disbug onboard"'
