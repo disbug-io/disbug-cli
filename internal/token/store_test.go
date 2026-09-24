@@ -364,7 +364,7 @@ func TestReadEnvOverrideDefaultsAPIURLAndSkipsProfilePathValidation(t *testing.T
 		t.Fatalf("Read() error = %v", err)
 	}
 
-	want := Token{Token: "env-token", APIURL: "https://disbug.io"}
+	want := Token{Token: "env-token", APIURL: "https://app.disbug.io"}
 	if got != want {
 		t.Fatalf("Read() = %#v, want %#v", got, want)
 	}

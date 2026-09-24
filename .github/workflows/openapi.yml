@@ -6,7 +6,7 @@ name: openapi-regen
   workflow_dispatch:
 
 env:
-  DISBUG_SCHEMA_URL: https://disbug.io/api/schema/
+  DISBUG_SCHEMA_URL: https://app.disbug.io/api/schema/
 
 jobs:
   regen:

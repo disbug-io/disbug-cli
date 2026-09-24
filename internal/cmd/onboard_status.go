@@ -21,7 +21,7 @@ func (c *OnboardCmd) runStatus(ctx context.Context, b bindings) error {
 	if err != nil {
 		return err
 	}
-	if c.APIURL != "" && strings.TrimRight(c.APIURL, "/") != strings.TrimRight(emptyDefault(profile.APIURL, "https://disbug.io"), "/") {
+	if c.APIURL != "" && strings.TrimRight(c.APIURL, "/") != strings.TrimRight(emptyDefault(profile.APIURL, "https://app.disbug.io"), "/") {
 		return errfmt.UsageError{Message: "The saved profile uses a different API URL; run disbug onboard to connect it first."}
 	}
 	if err := apiClient.RequireCapability(ctx, "onboarding_setup"); err != nil {

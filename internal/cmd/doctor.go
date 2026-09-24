@@ -41,7 +41,7 @@ func (c *DoctorCmd) Run(ctx context.Context, b bindings) error {
 
 	apiURL := tok.APIURL
 	if apiURL == "" {
-		apiURL = "https://disbug.io"
+		apiURL = "https://app.disbug.io"
 	}
 
 	_, _ = fmt.Fprintf(b.Stdout, "profile: %s\n", profile)

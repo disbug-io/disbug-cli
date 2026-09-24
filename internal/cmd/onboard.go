@@ -16,7 +16,7 @@ import (
 
 // OnboardCmd guides a user through the shortest setup path after browser authentication.
 type OnboardCmd struct {
-	APIURL     string `name:"api-url" env:"DISBUG_API_URL" help:"Disbug API URL (saved profile or https://disbug.io)."`
+	APIURL     string `name:"api-url" env:"DISBUG_API_URL" help:"Disbug API URL (saved profile or https://app.disbug.io)."`
 	ListenAddr string `name:"listen-addr" help:"Local listener host:port override."`
 	NoBrowser  bool   `name:"no-browser" help:"Print browser URLs instead of opening them."`
 	Force      bool   `help:"Overwrite an existing token profile."`
@@ -92,9 +92,9 @@ func (c *OnboardCmd) ensureLogin(
 	profile := profileName(b.Flags)
 	existing, err := token.Read(profile)
 	if c.APIURL == "" {
-		c.APIURL = emptyDefault(existing.APIURL, "https://disbug.io")
+		c.APIURL = emptyDefault(existing.APIURL, "https://app.disbug.io")
 	}
-	sameAPI := strings.TrimRight(c.APIURL, "/") == strings.TrimRight(emptyDefault(existing.APIURL, "https://disbug.io"), "/")
+	sameAPI := strings.TrimRight(c.APIURL, "/") == strings.TrimRight(emptyDefault(existing.APIURL, "https://app.disbug.io"), "/")
 	if err == nil && existing.Token != "" && !c.Force && sameAPI {
 		useExisting, promptErr := readYesNo(
 			b,

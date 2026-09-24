@@ -16,11 +16,11 @@ import (
 )
 
 const (
-	defaultAPIURL        = "https://disbug.io"
+	defaultAPIURL        = "https://app.disbug.io"
 	defaultTimeout       = 30 * time.Second
 	maxConcurrentDoJSON  = 16
 	meCacheTTL           = 30 * time.Second
-	requireCapabilityURL = "https://disbug.io"
+	requireCapabilityURL = "https://app.disbug.io"
 )
 
 // Client talks to the Disbug API.

@@ -459,7 +459,7 @@ func TestClient_NewNilDefaultsDoNotPanic(t *testing.T) {
 	if c.client == nil {
 		t.Fatal("New().client = nil, want http client")
 	}
-	if got, want := c.apiURL, "https://disbug.io"; got != want {
+	if got, want := c.apiURL, "https://app.disbug.io"; got != want {
 		t.Fatalf("apiURL = %q, want %q", got, want)
 	}
 	if c.clock == nil {

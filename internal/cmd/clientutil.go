@@ -31,7 +31,7 @@ func newAuthenticatedClient(flags *RootFlags) (*client.Client, token.Token, erro
 
 	apiURL := tok.APIURL
 	if apiURL == "" {
-		apiURL = "https://disbug.io"
+		apiURL = "https://app.disbug.io"
 	}
 
 	userAgent := fmt.Sprintf("disbug-cli/%s (%s/%s)", VersionString(), runtime.GOOS, runtime.GOARCH)
