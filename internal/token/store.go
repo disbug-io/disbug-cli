@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const defaultAPIURL = "https://disbug.io"
+const defaultAPIURL = "https://app.disbug.io"
 
 var (
 	// ErrProfileNotFound is returned when a requested profile file does not exist.

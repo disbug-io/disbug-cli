@@ -117,7 +117,7 @@ func formatAPIError(err APIError) string {
 	case err.Code == "agent_read_only":
 		return "This operation is denied for agent tokens (read-only)."
 	case err.Code == "free_tier_locked":
-		return "This operation is locked on the free-tier. Upgrade at https://disbug.io/billing."
+		return "This operation is locked on the free-tier. Upgrade at https://app.disbug.io/billing."
 	case err.Code == "not_found" || err.StatusCode == 404:
 		if err.Detail != "" {
 			return err.Detail

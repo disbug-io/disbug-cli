@@ -39,7 +39,7 @@ func TestFormatAPIErrorFreeTierLocked(t *testing.T) {
 	message := Format(APIError{StatusCode: 403, Code: "free_tier_locked"})
 
 	assert.Contains(t, message, "free-tier")
-	assert.Contains(t, message, "https://disbug.io/billing")
+	assert.Contains(t, message, "https://app.disbug.io/billing")
 }
 
 func TestFormatAPIErrorNotFound(t *testing.T) {

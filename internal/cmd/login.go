@@ -28,7 +28,7 @@ const (
 // LoginCmd logs in to Disbug and persists a token profile.
 type LoginCmd struct {
 	Name           string  `help:"Agent name to pre-fill. Defaults to hostname."`
-	APIURL         string  `name:"api-url" env:"DISBUG_API_URL" default:"https://disbug.io" help:"Disbug API URL."`
+	APIURL         string  `name:"api-url" env:"DISBUG_API_URL" default:"https://app.disbug.io" help:"Disbug API URL."`
 	ListenAddr     string  `name:"listen-addr" help:"Local listener host:port override."`
 	Manual         bool    `help:"Print auth URL and paste redirect URL back instead of listening."`
 	NoBrowser      bool    `name:"no-browser" help:"Print auth URL instead of opening the browser."`

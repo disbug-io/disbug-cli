@@ -18,7 +18,7 @@ import (
 	"github.com/disbug-io/disbug-cli/internal/token"
 )
 
-const defaultAPIURL = "https://disbug.io"
+const defaultAPIURL = "https://app.disbug.io"
 
 var versionStr = func() string { return "dev" }
 
