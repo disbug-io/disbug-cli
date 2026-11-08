@@ -97,6 +97,32 @@ Run `disbug configure` for Codex, Claude Code, or Cursor. Manual setup recipes a
 - [Hermes](docs/integrations/hermes.md)
 - [OpenClaw](docs/integrations/openclaw.md)
 
+### How a report reaches an AI coding agent
+
+The released v0.4.1 workflow is an explicit read, not automatic pickup:
+
+1. For a cloud report, authenticate with `disbug login`, then give the agent the
+   session or pin URL. A shell-capable agent can run `disbug session`, `disbug pin`,
+   `disbug pins`, or `disbug search`; an MCP-connected agent can call the cloud
+   tools listed above.
+2. For a downloaded local report JSON file, give the agent its filesystem path. A
+   shell-capable agent can run `disbug inspect`; an MCP-connected agent can call
+   `inspect_local_report`. This path does not upload the report to Disbug.
+
+`disbug configure` directly configures Codex, Claude Code, and Cursor. Claude
+Desktop, Hermes, and OpenClaw use the linked manual MCP recipes. v0.4.1 does not
+provide direct Copilot or Windsurf configuration, and a report is not picked up
+after an agent session closes unless another active process explicitly reads it.
+
+A report can contain a visible active-tab screenshot and optional technical
+evidence such as console errors/logs, available network details, bounded replay,
+DOM/selectors, events, browser/environment metadata, and local storage. Capture is
+not unlimited: diagnostics are opt-in per origin, individual attachments can be
+disabled, inputs are masked and replay has exclusions, and available response
+bodies are redacted and limited to 256 KB. These artifacts provide debugging
+context; they do not guarantee reproduction, a fix, broad browser compatibility,
+or a user outcome.
+
 ### Multi-profile
 
 ```bash
