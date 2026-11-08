@@ -60,6 +60,53 @@ type cloudWatchOptions struct {
 	Status  string
 	Project string
 	Now     func() time.Time
+	Skipped *watchSkipLog
+}
+
+// watchSkipLog prints one stderr line per session that watch skips, once per run.
+type watchSkipLog struct {
+	stderr io.Writer
+	seen   map[string]bool
+}
+
+func newWatchSkipLog(stderr io.Writer) *watchSkipLog {
+	return &watchSkipLog{stderr: stderr, seen: map[string]bool{}}
+}
+
+func (l *watchSkipLog) note(summary client.SessionSummary, reason string) {
+	if l == nil {
+		return
+	}
+	projectID := int64(0)
+	if summary.Project != nil {
+		projectID = summary.Project.ID
+	}
+	key := summary.ReportURL
+	if key == "" {
+		key = fmt.Sprintf("%s/%d/%d/%s", summary.TeamSlug, projectID, summary.ProjectSessionNumber, summary.CreatedAt)
+	}
+	if l.seen[key] {
+		return
+	}
+	l.seen[key] = true
+	label := summary.ReportURL
+	if label == "" {
+		label = fmt.Sprintf("%q", summary.Title)
+	}
+	_, _ = fmt.Fprintf(l.stderr, "skipping %s: %s\n", label, reason)
+}
+
+// watchSkipReason returns why watch cannot act on a listed session, or "" when it can.
+// Every new project gets a seeded sample report with session number 0 (backend CV-45).
+// It is example data, so it is never emitted: an --exec agent would try to fix it.
+func watchSkipReason(summary client.SessionSummary) string {
+	if summary.IsSample {
+		return "sample report (example data, not a real bug)"
+	}
+	if _, err := summary.SessionRef(); err != nil {
+		return err.Error()
+	}
+	return ""
 }
 
 type watchEmitter struct {
@@ -101,6 +148,7 @@ func (c *WatchCmd) Run(ctx context.Context, b bindings) error {
 		exec:   c.Exec,
 	}
 	dedupe := map[string]bool{}
+	skipped := newWatchSkipLog(b.Stderr)
 	now := func() time.Time {
 		return time.Now().UTC()
 	}
@@ -112,6 +160,7 @@ func (c *WatchCmd) Run(ctx context.Context, b bindings) error {
 			Status:  c.Status,
 			Project: c.Project,
 			Now:     now,
+			Skipped: skipped,
 		})
 		if err != nil {
 			return err
@@ -125,7 +174,13 @@ func (c *WatchCmd) Run(ctx context.Context, b bindings) error {
 		}
 	}
 
-	return watchCloudPoll(ctx, cloudClient, cloudWatchOptions{Since: liveSince, Status: c.Status, Project: c.Project, Now: now}, pollInterval, dedupe, emitter)
+	return watchCloudPoll(ctx, cloudClient, cloudWatchOptions{
+		Since:   liveSince,
+		Status:  c.Status,
+		Project: c.Project,
+		Now:     now,
+		Skipped: skipped,
+	}, pollInterval, dedupe, emitter)
 }
 
 func parseWatchPollInterval(raw string) (time.Duration, error) {
@@ -188,6 +243,10 @@ func cloudEvents(
 	}
 	events := make([]watchEvent, 0, len(resp.Results))
 	for _, summary := range resp.Results {
+		if reason := watchSkipReason(summary); reason != "" {
+			opts.Skipped.note(summary, reason)
+			continue
+		}
 		event, err := cloudWatchEvent(ctx, cli, summary, backfill, now())
 		if err != nil {
 			return nil, err

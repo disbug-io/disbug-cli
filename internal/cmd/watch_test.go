@@ -221,3 +221,107 @@ func setupWatchClient(t *testing.T, srv *httptest.Server) {
 		t.Fatalf("token.Write() error = %v", err)
 	}
 }
+
+// A new project's only session is the seeded "Sample Bug Report", which the
+// backend gives session number 0 and is_sample=true. watch must skip it with
+// one stderr line and keep polling, then emit the next real report.
+func TestWatchSkipsSampleReportAndKeepsRunning(t *testing.T) {
+	const sampleSummary = `{
+		"title":"Sample Bug Report",
+		"team_slug":"abb",
+		"project":{"id":2,"slug":"2","name":"Website"},
+		"project_session_number":0,
+		"report_url":"https://staging.disbug.us/abb/projects/2/sessions/0/",
+		"url":"https://disbug.io/",
+		"status":"open",
+		"pin_count":1,
+		"created_at":"2026-11-08T00:00:00Z",
+		"updated_at":"2026-11-08T00:00:00Z",
+		"free_tier_locked":false,
+		"is_sample":true
+	}`
+	const realSummary = `{
+		"title":"Checkout button broken",
+		"team_slug":"abb",
+		"project":{"id":2,"slug":"2","name":"Website"},
+		"project_session_number":1,
+		"report_url":"https://staging.disbug.us/abb/projects/2/sessions/1/",
+		"url":"https://example.test/checkout",
+		"status":"open",
+		"pin_count":1,
+		"created_at":"2026-11-08T00:05:00Z",
+		"updated_at":"2026-11-08T00:05:00Z",
+		"free_tier_locked":false,
+		"is_sample":false
+	}`
+
+	for _, tc := range []struct {
+		name string
+		args []string
+	}{
+		{name: "default", args: []string{"watch", "--cloud-only", "--poll-interval", "1ms"}},
+		{name: "since", args: []string{"watch", "--cloud-only", "--since", "2h", "--poll-interval", "1ms"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var listRequests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/api/sessions/":
+					// The first two lists (startup + first poll) hold only the
+					// sample report; the real report arrives after that.
+					results := sampleSummary
+					if listRequests.Add(1) > 2 {
+						results = realSummary + "," + sampleSummary
+					}
+					_, _ = io.WriteString(w, `{"results":[`+results+`],"next_cursor":null,"count":1,"free_tier_truncated":false}`)
+				case "/api/teams/abb/projects/2/sessions/1/":
+					_, _ = io.WriteString(w, `{
+						"team_slug":"abb",
+						"project_session_number":1,
+						"status":"open",
+						"project":{"id":2,"slug":"2","name":"Website"},
+						"report_url":"https://staging.disbug.us/abb/projects/2/sessions/1/",
+						"url":"https://example.test/checkout",
+						"updated_at":"2026-11-08T00:05:00Z",
+						"pins":[{"id":7,"number":1,"feedback":"real feedback","url":"https://example.test/checkout"}]
+					}`)
+				default:
+					t.Errorf("unexpected request path %s", r.URL.Path)
+					w.WriteHeader(http.StatusNotFound)
+				}
+			}))
+			t.Cleanup(server.Close)
+			setupWatchClient(t, server)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+			defer cancel()
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			if err := Execute(ctx, tc.args, nil, &stdout, &stderr); err != nil {
+				t.Fatalf("Execute() error = %v, want nil (watch should keep running); stderr=%q", err, stderr.String())
+			}
+
+			if got := listRequests.Load(); got < 4 {
+				t.Fatalf("listRequests = %d, want watch to keep polling past the sample report", got)
+			}
+			output := stdout.String()
+			if got := strings.Count(output, `"id":"abb/projects/2/sessions/1"`); got != 1 {
+				t.Fatalf("real session emitted %d times, want once; stdout=%q", got, output)
+			}
+			if !strings.Contains(output, `"backfill":false`) || !strings.Contains(output, `"feedback":"real feedback"`) {
+				t.Fatalf("stdout = %q, want the real report as a live event", output)
+			}
+			if strings.Contains(output, "sessions/0") {
+				t.Fatalf("stdout = %q, sample report must not be emitted", output)
+			}
+			errText := stderr.String()
+			if got := strings.Count(errText, "skipping"); got != 1 {
+				t.Fatalf("stderr = %q, want exactly one skip line for the sample report", errText)
+			}
+			if !strings.Contains(errText, "sample report") || !strings.Contains(errText, "sessions/0/") {
+				t.Fatalf("stderr = %q, want skip line naming the sample report", errText)
+			}
+		})
+	}
+}
