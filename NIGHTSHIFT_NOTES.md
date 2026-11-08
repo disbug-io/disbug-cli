@@ -12,8 +12,10 @@ The repository is the strongest current public technical proof for Disbug's agen
 
 ## Verification
 
-- Required: `go test ./...`
-- Check all newly named CLI commands against v0.4.1 help/source.
-- Check all named MCP tools against v0.4.1 registrations.
-- Check README local links and heading anchors.
-- Confirm the diff is documentation-only and does not overlap the changed hunks in open PRs #9, #11, #17, #18, or #19.
+- `go test ./...` passed on the host with Go 1.25.14; all packages passed.
+- Built `./cmd/disbug` and checked `--help` for all eight newly referenced CLI paths: `login`, `configure`, `session`, `pin`, `pins`, `search`, `inspect`, and `mcp`.
+- Checked all 11 named MCP tools against their current registrations.
+- Checked all seven relative README links; every target exists. The added section introduces no links or fragment anchors.
+- `git diff --check origin/main...HEAD` passed, and the branch changes only `README.md` plus this notes file.
+- Compared with open PRs #9, #11, #17, #18, and #19. PRs #9 and #11 already conflict with current `main`; this branch adds no conflict beyond those existing conflicts. PRs #17, #18, and #19 merge cleanly with this branch, and none changes this branch's added README section.
+- GitHub PR #20 is open against `main`, reports a clean merge state, and all five CI checks pass.
