@@ -29,8 +29,9 @@ archives:
 checksum:
   name_template: checksums.txt
 
-changelog:
-  disable: true
+# Release notes come from this version's CHANGELOG.md section, which the
+# release workflow passes with --release-notes. Don't set changelog.disable:
+# GoReleaser then ignores --release-notes and publishes an empty release body.
 
 brews:
   - repository:

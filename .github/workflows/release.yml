@@ -17,7 +17,7 @@ jobs:
   goreleaser:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Validate tag
@@ -29,18 +29,26 @@ jobs:
             echo "::error::Invalid tag format: $RELEASE_TAG"
             exit 1
           fi
+      # Runs before "Checkout tag", so a manual rerun of an older tag reads the
+      # notes from the branch the workflow was started on (normally main).
+      - name: Release notes from CHANGELOG.md
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          ./scripts/release-notes.sh "$RELEASE_TAG" > "$RUNNER_TEMP/release-notes.md"
+          cat "$RUNNER_TEMP/release-notes.md"
       - name: Checkout tag
         if: ${{ github.event_name == 'workflow_dispatch' }}
         run: git checkout "${{ inputs.tag }}"
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           version: "v2.15.4"
-          args: release --clean
+          args: release --clean --release-notes ${{ runner.temp }}/release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
