@@ -219,6 +219,58 @@ func TestCodexConfigureRestoresPreviousConfigWhenAddFails(t *testing.T) {
 	}
 }
 
+func TestPlanOffersMCPUpdateWhenConfiguredBinaryDiffers(t *testing.T) {
+	home := t.TempDir()
+	cursorDir := filepath.Join(home, ".cursor")
+	if err := os.MkdirAll(cursorDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(cursorDir, "mcp.json")
+	if err := os.WriteFile(configPath, []byte(`{"mcpServers":{"disbug":{"command":"/usr/local/bin/disbug","args":["mcp"]}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager := testManager(home, "default")
+	manager.binaryPath = "/opt/disbug-download/disbug"
+
+	changes, err := manager.Plan(context.Background(), Options{Agents: []AgentID{Cursor}, SkipSkill: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) != 1 || changes[0].Component != "MCP" {
+		t.Fatalf("changes = %#v, want one MCP configure change", changes)
+	}
+}
+
+func TestStatusesReportsBinaryMismatch(t *testing.T) {
+	home := t.TempDir()
+	cursorDir := filepath.Join(home, ".cursor")
+	if err := os.MkdirAll(cursorDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(cursorDir, "mcp.json")
+	if err := os.WriteFile(configPath, []byte(`{"mcpServers":{"disbug":{"command":"/usr/local/bin/disbug","args":["mcp"]}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager := testManager(home, "default")
+	manager.binaryPath = "/opt/disbug-download/disbug"
+	manager.lookPath = cursorOnlyLookPath
+
+	statuses := manager.Statuses(context.Background())
+	if len(statuses) != 1 {
+		t.Fatalf("statuses = %#v, want one Cursor status", statuses)
+	}
+	status := statuses[0]
+	if status.MCP {
+		t.Fatal("MCP should be false when configured binary differs")
+	}
+	if !status.MCPEntry {
+		t.Fatal("MCPEntry should be true when disbug MCP args match")
+	}
+	if status.ConfiguredCommand != "/usr/local/bin/disbug" {
+		t.Fatalf("ConfiguredCommand = %q", status.ConfiguredCommand)
+	}
+}
+
 func TestMCPStatusAcceptsBareDisbugCommandFromDocs(t *testing.T) {
 	home := t.TempDir()
 	manager := testManager(home, "default")
@@ -247,6 +299,19 @@ func TestMCPStatusAcceptsBareDisbugCommandFromDocs(t *testing.T) {
 	}
 }
 
+func TestCanonicalBinaryPathCleansPaths(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "disbug")
+	if err := os.WriteFile(path, []byte("stub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got := canonicalBinaryPath(path + string(os.PathSeparator) + ".")
+	want := filepath.Clean(path)
+	if got != want {
+		t.Fatalf("canonicalBinaryPath() = %q, want %q", got, want)
+	}
+}
+
 func testManager(home, profile string) *Manager {
 	return &Manager{
 		home:       home,
@@ -259,6 +324,16 @@ func testManager(home, profile string) *Manager {
 			return nil, errors.New("not configured")
 		},
 	}
+}
+
+func cursorOnlyLookPath(name string) (string, error) {
+	if name == "disbug" {
+		return "/usr/local/bin/disbug", nil
+	}
+	if name == "cursor" || name == "cursor-agent" {
+		return "/usr/local/bin/" + name, nil
+	}
+	return "", errors.New("not found")
 }
 
 func containsCall(calls [][]string, want []string) bool {

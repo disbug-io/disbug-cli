@@ -75,6 +75,7 @@ func printIntegrationStatus(ctx context.Context, b bindings, profile string) {
 		_, _ = fmt.Fprintf(b.Stdout, "agents: unable to check - %s\n", err)
 		return
 	}
+	_, _ = fmt.Fprintf(b.Stdout, "disbug binary: %s\n", manager.BinaryPath())
 	statuses := manager.Statuses(ctx)
 	if len(statuses) == 0 {
 		_, _ = fmt.Fprintln(b.Stdout, "agents: none detected")
@@ -83,10 +84,7 @@ func printIntegrationStatus(ctx context.Context, b bindings, profile string) {
 	}
 	missing := false
 	for _, status := range statuses {
-		mcpState := "missing"
-		if status.MCP {
-			mcpState = "OK"
-		}
+		mcpState := formatMCPStatus(status)
 		skillState := "missing"
 		if status.Skill {
 			skillState = "OK"
@@ -101,6 +99,16 @@ func printIntegrationStatus(ctx context.Context, b bindings, profile string) {
 	} else {
 		_, _ = fmt.Fprintln(b.Stdout, "agent setup: OK")
 	}
+}
+
+func formatMCPStatus(status configure.Status) string {
+	if status.MCP {
+		return "OK"
+	}
+	if status.MCPEntry && status.ConfiguredCommand != "" {
+		return fmt.Sprintf("binary mismatch (config uses %s)", status.ConfiguredCommand)
+	}
+	return "missing"
 }
 
 func missingCapabilities(me interface{ HasCapability(string) bool }) []string {

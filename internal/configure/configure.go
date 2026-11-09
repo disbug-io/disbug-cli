@@ -43,10 +43,12 @@ type Change struct {
 
 // Status describes the local Disbug integration for one detected agent.
 type Status struct {
-	Agent     AgentID
-	AgentName string
-	MCP       bool
-	Skill     bool
+	Agent             AgentID
+	AgentName         string
+	MCP               bool
+	MCPEntry          bool
+	ConfiguredCommand string
+	Skill             bool
 }
 
 // Options controls planning and applying configuration.
@@ -74,12 +76,9 @@ func New(profile string) (*Manager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("find home directory: %w", err)
 	}
-	binaryPath, err := exec.LookPath("disbug")
+	binaryPath, err := RunningBinaryPath()
 	if err != nil {
-		binaryPath, err = os.Executable()
-		if err != nil {
-			return nil, fmt.Errorf("find disbug executable: %w", err)
-		}
+		return nil, err
 	}
 	return &Manager{
 		home:       home,
@@ -103,6 +102,11 @@ func ParseAgent(value string) (AgentID, error) {
 		}
 	}
 	return "", fmt.Errorf("unsupported agent %q (choose codex, claude-code, or cursor)", value)
+}
+
+// BinaryPath returns the canonical path of the disbug binary used for configure and doctor.
+func (m *Manager) BinaryPath() string {
+	return m.binaryPath
 }
 
 // Agents returns all supported agents with local detection results.
@@ -172,10 +176,16 @@ func (m *Manager) Statuses(ctx context.Context) []Status {
 		if !m.detected(agent) {
 			continue
 		}
+		cfg, _ := m.configuredMCP(ctx, agent)
 		mcpOK, _ := m.mcpConfigured(ctx, agent)
 		skillOK, _ := m.skillState(m.skillTarget(agent))
 		statuses = append(statuses, Status{
-			Agent: agent, AgentName: displayName(agent), MCP: mcpOK, Skill: skillOK == "current",
+			Agent:             agent,
+			AgentName:         displayName(agent),
+			MCP:               mcpOK,
+			MCPEntry:          cfg.entryOK,
+			ConfiguredCommand: cfg.command,
+			Skill:             skillOK == "current",
 		})
 	}
 	return statuses
@@ -273,6 +283,24 @@ func (m *Manager) serverArgs() []string {
 		return []string{"mcp"}
 	}
 	return []string{"--profile", m.profile, "mcp"}
+}
+
+// RunningBinaryPath returns the canonical filesystem path of the current disbug binary.
+func RunningBinaryPath() (string, error) {
+	path, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("find disbug executable: %w", err)
+	}
+	return canonicalBinaryPath(path), nil
+}
+
+func canonicalBinaryPath(path string) string {
+	path = filepath.Clean(path)
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return path
+	}
+	return filepath.Clean(resolved)
 }
 
 // SortChanges keeps plan output stable across platforms and tests.
