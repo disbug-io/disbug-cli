@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- `disbug watch` no longer exits on a project's seeded "Sample Bug Report" (session number 0). It skips the sample, and any session without a full report identity, with one stderr line, then keeps watching
+
 ### Added
 - Attachment filenames and IDs in CLI and MCP session/pin results
 - CLI and MCP attachment downloads that return file contents directly to agents

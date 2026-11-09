@@ -43,6 +43,7 @@ type SessionSummary struct {
 	CreatedAt            string              `json:"created_at"`
 	UpdatedAt            string              `json:"updated_at"`
 	FreeTierLocked       bool                `json:"free_tier_locked"`
+	IsSample             bool                `json:"is_sample"`
 	Attachments          []SessionAttachment `json:"attachments"`
 }
 
