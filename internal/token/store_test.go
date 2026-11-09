@@ -452,19 +452,246 @@ func TestDeleteRemovesProfileAndIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestReadMigratesLegacyAPIURL(t *testing.T) {
+	for _, legacy := range []string{"https://disbug.io", "https://disbug.io/", "http://disbug.io", "http://disbug.io/", " HTTPS://Disbug.io// "} {
+		t.Run(legacy, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			t.Setenv("DISBUG_TOKEN", "")
+			t.Setenv("DISBUG_API_URL", "")
+
+			stored := Token{
+				Token:          "secret",
+				APIURL:         legacy,
+				AgentName:      "agent",
+				Team:           "Team",
+				TeamSlug:       "team",
+				CreatedByEmail: "user@example.com",
+				CreatedAt:      "2026-01-02T03:04:05Z",
+			}
+			if err := Write("default", stored, false); err != nil {
+				t.Fatalf("Write() error = %v", err)
+			}
+			want := stored
+			want.APIURL = "https://app.disbug.io"
+
+			var got Token
+			stdout, stderr := captureOutput(t, func() {
+				var err error
+				got, err = Read("default")
+				if err != nil {
+					t.Fatalf("Read() error = %v", err)
+				}
+			})
+			if got != want {
+				t.Fatalf("Read() = %#v, want %#v", got, want)
+			}
+			if stdout != "" {
+				t.Fatalf("stdout = %q, want nothing", stdout)
+			}
+			if strings.Count(stderr, "\n") != 1 || !strings.Contains(stderr, "https://app.disbug.io") {
+				t.Fatalf("stderr = %q, want one line naming the new API address", stderr)
+			}
+
+			path, err := ProfilePath("default")
+			if err != nil {
+				t.Fatalf("ProfilePath() error = %v", err)
+			}
+			if saved := readProfileFile(t, path); saved != want {
+				t.Fatalf("saved profile = %#v, want %#v", saved, want)
+			}
+			if runtime.GOOS != "windows" {
+				info, err := os.Stat(path)
+				if err != nil {
+					t.Fatalf("Stat() error = %v", err)
+				}
+				if mode := info.Mode().Perm(); mode != 0o600 {
+					t.Fatalf("profile mode = %v, want 0600", mode)
+				}
+			}
+			entries, err := os.ReadDir(filepath.Dir(path))
+			if err != nil {
+				t.Fatalf("ReadDir() error = %v", err)
+			}
+			if len(entries) != 1 {
+				t.Fatalf("config dir has %d entries, want only the profile (no temporary files)", len(entries))
+			}
+
+			stdout, stderr = captureOutput(t, func() {
+				if _, err := Read("default"); err != nil {
+					t.Fatalf("second Read() error = %v", err)
+				}
+			})
+			if stdout != "" || stderr != "" {
+				t.Fatalf("second Read() printed stdout=%q stderr=%q, want nothing", stdout, stderr)
+			}
+		})
+	}
+}
+
+func TestReadKeepsOtherAPIURLs(t *testing.T) {
+	for _, apiURL := range []string{"", "https://app.disbug.io", "https://disbug.io/api", "https://staging.disbug.io", "https://disbug.io.example.com", "http://localhost:8000"} {
+		t.Run(apiURL, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			t.Setenv("DISBUG_TOKEN", "")
+			t.Setenv("DISBUG_API_URL", "")
+
+			if err := Write("default", Token{Token: "secret", APIURL: apiURL}, false); err != nil {
+				t.Fatalf("Write() error = %v", err)
+			}
+			path, err := ProfilePath("default")
+			if err != nil {
+				t.Fatalf("ProfilePath() error = %v", err)
+			}
+			before, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("ReadFile() error = %v", err)
+			}
+
+			var got Token
+			stdout, stderr := captureOutput(t, func() {
+				got, err = Read("default")
+			})
+			if err != nil {
+				t.Fatalf("Read() error = %v", err)
+			}
+			if got.APIURL != apiURL {
+				t.Fatalf("Read().APIURL = %q, want %q", got.APIURL, apiURL)
+			}
+			if stdout != "" || stderr != "" {
+				t.Fatalf("Read() printed stdout=%q stderr=%q, want nothing", stdout, stderr)
+			}
+			after, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("ReadFile() error = %v", err)
+			}
+			if string(after) != string(before) {
+				t.Fatalf("profile changed from %q to %q", before, after)
+			}
+		})
+	}
+}
+
+func TestReadMigratesLegacyAPIURLUnderEnvOverride(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("DISBUG_TOKEN", "")
+	t.Setenv("DISBUG_API_URL", "http://localhost:8000")
+
+	if err := Write("default", Token{Token: "secret", APIURL: "https://disbug.io"}, false); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	var got Token
+	captureOutput(t, func() {
+		var err error
+		got, err = Read("default")
+		if err != nil {
+			t.Fatalf("Read() error = %v", err)
+		}
+	})
+	if got.APIURL != "http://localhost:8000" {
+		t.Fatalf("Read().APIURL = %q, want the DISBUG_API_URL override", got.APIURL)
+	}
+
+	path, err := ProfilePath("default")
+	if err != nil {
+		t.Fatalf("ProfilePath() error = %v", err)
+	}
+	if saved := readProfileFile(t, path); saved.APIURL != "https://app.disbug.io" {
+		t.Fatalf("saved APIURL = %q, want https://app.disbug.io", saved.APIURL)
+	}
+}
+
+func TestReadUsesNewAPIURLWhenProfileCannotBeRewritten(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permissions are Unix-specific")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("DISBUG_TOKEN", "")
+	t.Setenv("DISBUG_API_URL", "")
+
+	if err := Write("default", Token{Token: "secret", APIURL: "https://disbug.io"}, false); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	dir, err := Dir()
+	if err != nil {
+		t.Fatalf("Dir() error = %v", err)
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatalf("Chmod() error = %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	var got Token
+	stdout, stderr := captureOutput(t, func() {
+		got, err = Read("default")
+	})
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+	if got.APIURL != "https://app.disbug.io" {
+		t.Fatalf("Read().APIURL = %q, want https://app.disbug.io", got.APIURL)
+	}
+	if stdout != "" {
+		t.Fatalf("stdout = %q, want nothing", stdout)
+	}
+	if strings.Count(stderr, "\n") != 1 || !strings.Contains(stderr, "warning:") {
+		t.Fatalf("stderr = %q, want one warning line", stderr)
+	}
+
+	path, err := ProfilePath("default")
+	if err != nil {
+		t.Fatalf("ProfilePath() error = %v", err)
+	}
+	if saved := readProfileFile(t, path); saved.APIURL != "https://disbug.io" {
+		t.Fatalf("saved APIURL = %q, want the original value left in place", saved.APIURL)
+	}
+}
+
+func readProfileFile(t *testing.T, path string) Token {
+	t.Helper()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	var token Token
+	if err := json.Unmarshal(data, &token); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	return token
+}
+
+func captureOutput(t *testing.T, fn func()) (stdout, stderr string) {
+	t.Helper()
+
+	stderr = captureStderr(t, func() {
+		stdout = captureFile(t, &os.Stdout, fn)
+	})
+	return stdout, stderr
+}
+
 func captureStderr(t *testing.T, fn func()) string {
 	t.Helper()
 
-	original := os.Stderr
+	return captureFile(t, &os.Stderr, fn)
+}
+
+func captureFile(t *testing.T, target **os.File, fn func()) string {
+	t.Helper()
+
+	original := *target
 	reader, writer, err := os.Pipe()
 	if err != nil {
 		t.Fatalf("Pipe() error = %v", err)
 	}
 	defer reader.Close()
 
-	os.Stderr = writer
+	*target = writer
 	defer func() {
-		os.Stderr = original
+		*target = original
 	}()
 
 	fn()

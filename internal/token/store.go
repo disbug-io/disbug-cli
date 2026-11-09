@@ -5,11 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 )
 
 const defaultAPIURL = "https://app.disbug.io"
+
+// legacyAPIHost is the API host that v0.4.0 and earlier saved in profiles.
+// The API now lives at defaultAPIURL.
+const legacyAPIHost = "disbug.io"
 
 var (
 	// ErrProfileNotFound is returned when a requested profile file does not exist.
@@ -67,6 +72,15 @@ func Read(name string) (Token, error) {
 		return Token{}, fmt.Errorf("parse token profile %s: %w", path, err)
 	}
 
+	if isLegacyAPIURL(token.APIURL) {
+		token.APIURL = defaultAPIURL
+		if err := replaceProfile(path, token); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: using the new API address %s for profile %q, but could not save it: %v\n", defaultAPIURL, name, err)
+		} else {
+			fmt.Fprintf(os.Stderr, "note: profile %q now uses the new API address %s\n", name, defaultAPIURL)
+		}
+	}
+
 	if apiURL := os.Getenv("DISBUG_API_URL"); apiURL != "" {
 		token.APIURL = apiURL
 	}
@@ -94,11 +108,10 @@ func Write(name string, token Token, force bool) error {
 		}
 	}
 
-	data, err := json.MarshalIndent(token, "", "  ")
+	data, err := encodeProfile(path, token)
 	if err != nil {
-		return fmt.Errorf("encode token profile %s: %w", path, err)
+		return err
 	}
-	data = append(data, '\n')
 
 	if !force {
 		return writeNewProfile(path, data)
@@ -111,6 +124,55 @@ func Write(name string, token Token, force bool) error {
 		if err := os.Chmod(path, 0o600); err != nil {
 			return fmt.Errorf("chmod token profile %s: %w", path, err)
 		}
+	}
+
+	return nil
+}
+
+func encodeProfile(path string, token Token) ([]byte, error) {
+	data, err := json.MarshalIndent(token, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("encode token profile %s: %w", path, err)
+	}
+	return append(data, '\n'), nil
+}
+
+// isLegacyAPIURL reports whether apiURL is the bare disbug.io address that
+// old releases saved, with or without a trailing slash, over http or https.
+func isLegacyAPIURL(apiURL string) bool {
+	apiURL = strings.ToLower(strings.TrimRight(strings.TrimSpace(apiURL), "/"))
+	return apiURL == "https://"+legacyAPIHost || apiURL == "http://"+legacyAPIHost
+}
+
+// replaceProfile atomically rewrites an existing profile file with mode 0600,
+// so a concurrent reader sees either the old or the new file, never a partial one.
+func replaceProfile(path string, token Token) error {
+	data, err := encodeProfile(path, token)
+	if err != nil {
+		return err
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return fmt.Errorf("create temporary profile: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer func() { _ = os.Remove(tmpPath) }()
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write temporary profile: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temporary profile: %w", err)
+	}
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(tmpPath, 0o600); err != nil {
+			return fmt.Errorf("chmod temporary profile: %w", err)
+		}
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("replace profile: %w", err)
 	}
 
 	return nil
