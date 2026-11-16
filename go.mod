@@ -1,6 +1,6 @@
 module github.com/disbug-io/disbug-cli
 
-go 1.25.0
+go 1.26.0
 
 toolchain go1.26.11
 
@@ -8,7 +8,7 @@ require (
 	github.com/alecthomas/kong v1.17.0
 	github.com/getkin/kin-openapi v0.153.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
-	github.com/oapi-codegen/runtime v1.8.0
+	github.com/oapi-codegen/runtime v1.9.0
 	github.com/stretchr/testify v1.12.1
 )
 
