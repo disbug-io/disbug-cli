@@ -42,13 +42,19 @@ The snapshot command builds local artifacts only. It does not publish packages.
 
 ## Publish
 
-Choose the release version, then push a semver tag:
+1. In `CHANGELOG.md`, move the `[Unreleased]` entries under a new `## [X.Y.Z] - YYYY-MM-DD` heading and merge that to `main`. This section becomes the GitHub release notes. Preview it with:
 
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
+   ```bash
+   ./scripts/release-notes.sh vX.Y.Z
+   ```
 
-The `release` workflow builds GitHub release artifacts, updates the Homebrew formula, and updates the Scoop manifest.
+2. Push a semver tag:
 
-You can also rerun a release from GitHub Actions using the manual `workflow_dispatch` input with an existing tag, for example `v0.1.0`.
+   ```bash
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
+   ```
+
+The `release` workflow stops before building if `CHANGELOG.md` has no section for the tag. Otherwise it builds the GitHub release artifacts, publishes that section as the release notes, and updates the Homebrew formula and Scoop manifest.
+
+You can also rerun a release from GitHub Actions using the manual `workflow_dispatch` input with an existing tag, for example `v0.1.0`. A rerun reads the notes from `CHANGELOG.md` on the branch you start it from (normally `main`). GoReleaser keeps an existing release's notes and only fills them in when they are empty.
