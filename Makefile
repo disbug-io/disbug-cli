@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := build
-.PHONY: build test lint fmt fmt-check tools install-hooks ci clean run cover codegen
+.PHONY: build test lint fmt fmt-check tools install-hooks ci clean run cover codegen vuln
 
 BIN_DIR := $(CURDIR)/bin
 BIN := $(BIN_DIR)/disbug
@@ -24,6 +24,7 @@ OAPI_CODEGEN := $(TOOLS_DIR)/oapi-codegen
 OAPI_CODEGEN_VERSION := v2.4.0
 TOOLS_STAMP := $(TOOLS_DIR)/.versions
 TOOLS_VERSION := gofumpt=v0.9.2;goimports=v0.44.0;golangci-lint=v2.11.4
+GOVULNCHECK_VERSION := v1.9.0
 
 build:
 	@mkdir -p $(BIN_DIR)
@@ -74,5 +75,8 @@ fmt-check: tools
 
 lint: tools
 	@$(GOLANGCI_LINT) run
+
+vuln:
+	@go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
 ci: fmt-check lint test

@@ -14,6 +14,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: check Go toolchain
+        run: ./scripts/check-go-toolchain.sh
       - name: tools
         run: make tools
       - name: fmt-check
@@ -31,6 +33,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: check Go toolchain
+        run: ./scripts/check-go-toolchain.sh
       - name: schema
         run: go test -tags schema ./internal/client/...
 
@@ -45,5 +49,21 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: check Go toolchain
+        shell: bash
+        run: ./scripts/check-go-toolchain.sh
       - name: build
         run: go build ./...
+
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: check Go toolchain
+        run: ./scripts/check-go-toolchain.sh
+      - name: govulncheck
+        run: make vuln

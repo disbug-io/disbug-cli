@@ -1,6 +1,11 @@
 version: 2
 project_name: disbug
 
+before:
+  hooks:
+    # Refuse to build release binaries with anything but the Go pinned in go.mod.
+    - ./scripts/check-go-toolchain.sh
+
 builds:
   - id: disbug
     main: ./cmd/disbug

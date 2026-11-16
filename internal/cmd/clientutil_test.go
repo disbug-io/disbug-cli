@@ -55,6 +55,35 @@ func TestNewAuthenticatedClientStoredProfileReturnsClientAndToken(t *testing.T) 
 	}
 }
 
+func TestNewAuthenticatedClientMovesOldProfileToCurrentAPI(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("DISBUG_TOKEN", "")
+	t.Setenv("DISBUG_API_URL", "")
+
+	if err := token.Write("default", token.Token{Token: "stored-token", APIURL: "https://disbug.io"}, false); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	client, got, err := newAuthenticatedClient(nil)
+	if err != nil {
+		t.Fatalf("newAuthenticatedClient() error = %v", err)
+	}
+	if client == nil {
+		t.Fatal("newAuthenticatedClient() client = nil, want client")
+	}
+	if got.APIURL != "https://app.disbug.io" {
+		t.Fatalf("newAuthenticatedClient() APIURL = %q, want https://app.disbug.io", got.APIURL)
+	}
+
+	saved, err := token.Read("default")
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+	if saved.APIURL != "https://app.disbug.io" {
+		t.Fatalf("saved APIURL = %q, want https://app.disbug.io", saved.APIURL)
+	}
+}
+
 func TestNewAuthenticatedClientEmptyStoredTokenReturnsNoToken(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("DISBUG_TOKEN", "")
