@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 Each version's section below is used as its GitHub release notes. Before tagging `vX.Y.Z`, move the `[Unreleased]` entries under a new `## [X.Y.Z] - YYYY-MM-DD` heading. The release workflow stops if that section is missing.
 
 ## [Unreleased]
+
+## [0.4.3] - 2026-11-16
+
 ### Fixed
 - Profiles saved by v0.4.0 and earlier still pointed at `https://disbug.io`, so every command failed with "not found" after the API moved to `https://app.disbug.io`. The CLI and MCP server now use `https://app.disbug.io` for those profiles and update the saved file (kept at mode 0600), printing one note on stderr
 
