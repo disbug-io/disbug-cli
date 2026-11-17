@@ -11,14 +11,30 @@ import (
 	"strings"
 )
 
+type configuredMCPSnapshot struct {
+	command string
+	entryOK bool
+}
+
 func (m *Manager) mcpConfigured(ctx context.Context, agent AgentID) (bool, error) {
+	cfg, err := m.configuredMCP(ctx, agent)
+	if err != nil {
+		return false, err
+	}
+	if !cfg.entryOK {
+		return false, nil
+	}
+	return m.sameCommand(cfg.command, m.binaryPath), nil
+}
+
+func (m *Manager) configuredMCP(ctx context.Context, agent AgentID) (configuredMCPSnapshot, error) {
 	switch agent {
 	case Codex:
 		output, err := m.run(ctx, "codex", "mcp", "get", "disbug", "--json")
 		if err != nil {
 			// A missing server is reported as a command error by Codex.
 			//nolint:nilerr
-			return false, nil
+			return configuredMCPSnapshot{}, nil
 		}
 		var config struct {
 			Transport struct {
@@ -30,29 +46,30 @@ func (m *Manager) mcpConfigured(ctx context.Context, agent AgentID) (bool, error
 		if err := json.Unmarshal(output, &config); err != nil {
 			// Unrecognized output means this integration is not usable yet.
 			//nolint:nilerr
-			return false, nil
+			return configuredMCPSnapshot{}, nil
 		}
-		return config.Transport.Type == "stdio" && m.sameCommand(config.Transport.Command, m.binaryPath) && slicesEqual(config.Transport.Args, m.serverArgs()), nil
+		entryOK := config.Transport.Type == "stdio" && slicesEqual(config.Transport.Args, m.serverArgs())
+		return configuredMCPSnapshot{command: config.Transport.Command, entryOK: entryOK}, nil
 	case ClaudeCode, Cursor:
-		return m.jsonMCPConfigured(m.mcpTarget(agent))
+		return m.jsonConfiguredMCP(m.mcpTarget(agent))
 	default:
-		return false, fmt.Errorf("unsupported agent %q", agent)
+		return configuredMCPSnapshot{}, fmt.Errorf("unsupported agent %q", agent)
 	}
 }
 
-func (m *Manager) jsonMCPConfigured(path string) (bool, error) {
+func (m *Manager) jsonConfiguredMCP(path string) (configuredMCPSnapshot, error) {
 	// path is derived from the current user's home directory and a fixed agent target.
 	//nolint:gosec
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
+		return configuredMCPSnapshot{}, nil
 	}
 	if err != nil {
-		return false, err
+		return configuredMCPSnapshot{}, err
 	}
 	var root map[string]json.RawMessage
 	if err := json.Unmarshal(data, &root); err != nil {
-		return false, fmt.Errorf("parse %s: %w", path, err)
+		return configuredMCPSnapshot{}, fmt.Errorf("parse %s: %w", path, err)
 	}
 	var servers map[string]struct {
 		Command string   `json:"command"`
@@ -61,10 +78,14 @@ func (m *Manager) jsonMCPConfigured(path string) (bool, error) {
 	if err := json.Unmarshal(root["mcpServers"], &servers); err != nil {
 		// A missing or differently shaped mcpServers value is simply unconfigured.
 		//nolint:nilerr
-		return false, nil
+		return configuredMCPSnapshot{}, nil
 	}
 	server, ok := servers["disbug"]
-	return ok && m.sameCommand(server.Command, m.binaryPath) && slicesEqual(server.Args, m.serverArgs()), nil
+	if !ok {
+		return configuredMCPSnapshot{}, nil
+	}
+	entryOK := slicesEqual(server.Args, m.serverArgs())
+	return configuredMCPSnapshot{command: server.Command, entryOK: entryOK}, nil
 }
 
 func (m *Manager) configureMCP(ctx context.Context, agent AgentID) error {
@@ -189,12 +210,17 @@ func (m *Manager) writeJSONMCP(path string) error {
 }
 
 func (m *Manager) sameCommand(left, right string) bool {
-	left = m.resolveBareCommand(left)
-	right = m.resolveBareCommand(right)
+	left = m.canonicalCommandPath(left)
+	right = m.canonicalCommandPath(right)
 	if runtime.GOOS == "windows" {
-		return strings.EqualFold(filepath.Clean(left), filepath.Clean(right))
+		return strings.EqualFold(left, right)
 	}
-	return filepath.Clean(left) == filepath.Clean(right)
+	return left == right
+}
+
+func (m *Manager) canonicalCommandPath(command string) string {
+	command = m.resolveBareCommand(command)
+	return canonicalBinaryPath(command)
 }
 
 func (m *Manager) resolveBareCommand(command string) string {
