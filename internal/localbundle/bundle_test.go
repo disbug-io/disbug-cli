@@ -69,6 +69,12 @@ func TestInspectPinExtractsRequestedArtifacts(t *testing.T) {
 	if got, want := len(pin.Network), 1; got != want {
 		t.Fatalf("len(Network) = %d, want %d", got, want)
 	}
+	if _, ok := pin.Network[0]["curl_safe"]; !ok {
+		t.Fatal("Network[0].curl_safe missing, want parsed agent parity fields")
+	}
+	if _, ok := pin.Network[0]["capture_status"]; !ok {
+		t.Fatal("Network[0].capture_status missing, want parsed agent parity fields")
+	}
 	if got, want := len(pin.Events), 1; got != want {
 		t.Fatalf("len(Events) = %d, want %d", got, want)
 	}

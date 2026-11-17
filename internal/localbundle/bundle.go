@@ -13,6 +13,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/disbug-io/disbug-cli/internal/logparse"
 )
 
 // Bundle is a portable local Disbug report downloaded from the Chrome extension.
@@ -265,7 +267,8 @@ func (b *Bundle) InspectPin(number int, fields []string, cacheDir string) (PinIn
 			case "console":
 				result.Console = firstLogSlice(logs.Console, logs.ConsoleLogs)
 			case "network":
-				result.Network = firstLogSlice(logs.Network, logs.NetworkLogs)
+				rawNetwork := firstLogSlice(logs.Network, logs.NetworkLogs)
+				result.Network = logparse.ParseNetworkLogs(rawNetwork)
 			case "events":
 				result.Events = firstLogSlice(logs.Events, logs.UserEvents)
 			}
